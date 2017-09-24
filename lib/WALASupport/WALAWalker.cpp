@@ -53,6 +53,10 @@ jobject WALAIntegration::makePosition(int fl, int fc, int ll, int lc) {
 	return result;
 }
 
+jobject WALAIntegration::makeConstant(string value) {
+	return CAst->makeConstant(value.c_str());
+}
+
 void WALAIntegration::print(jobject obj) {
 	print_object(java_env, obj);
 	THROW_ANY_EXCEPTION(cpp_ex);
@@ -145,9 +149,11 @@ void WALAWalker::getInstrSrcInfo(SILInstruction &instr, InstrInfo *instrInfo) {
 // Gets the ValueKind of the SILInstruction then goes through the mega-switch to handle 
 // appropriately.  
 // TODO: currently only returns ValueKind, switch is not descended into functionally
-ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr) {
+ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr, WALAIntegration &wala) {
+	raw_ostream &outs = llvm::outs();
 
 	auto instrKind = instr.getKind();
+
 	switch (instrKind) {
 	
 		case ValueKind::SILPHIArgument:
@@ -193,12 +199,78 @@ ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr) {
 		}
 		
 		case ValueKind::StringLiteralInst: {
-// 			outfile		<< "\t\t << StringLiteralInst >>" << "\n";
+
+			// Cast the instr to access methods
+			StringLiteralInst *castInst = cast<StringLiteralInst>(&instr);
+
+			// ValueKind indentifier
+ 			outs		<< "\t\t << StringLiteralInst >>" << "\n";
+
+ 			// Value: the string data for the literal, in UTF-8.
+			StringRef value = castInst->getValue();
+			outs     << "\t\t\t\t [VAL]: " << value << "\n";
+
+			// Encoding: the desired encoding of the text.
+			string encoding;
+			switch (castInst->getEncoding()) {
+				case StringLiteralInst::Encoding::UTF8: {
+					encoding = "UTF8";
+					break;
+				}
+				case StringLiteralInst::Encoding::UTF16: {
+					encoding = "UTF16";
+					break;
+				}
+				case StringLiteralInst::Encoding::ObjCSelector: {
+					encoding = "ObjCSelector";
+					break;
+				}
+			}
+			outs     << "\t\t\t\t [ENCODING]: " << encoding << "\n";
+
+			// Count: encoding-based length of the string literal in code units.
+			uint64_t codeUnitCount = castInst->getCodeUnitCount();
+			outs     << "\t\t\t\t [COUNT]: " << codeUnitCount << "\n";
+
+			// Call WALA in Java
+			jobject walaConstant = wala.makeConstant(value);
+			wala.print(walaConstant);
 			break;
 		}
 		
 		case ValueKind::ConstStringLiteralInst: {
-// 			outfile		<< "\t\t << ConstStringLiteralInst >>" << "\n";
+ 			outfile		<< "\t\t << ConstStringLiteralInst >>" << "\n";
+			// Cast the instr to access methods
+			ConstStringLiteralInst *castInst = cast<ConstStringLiteralInst>(&instr);
+			 			// Value: the string data for the literal, in UTF-8.
+			StringRef value = castInst->getValue();
+			outs     << "\t\t\t\t [VAL]: " << value << "\n";
+
+			// Encoding: the desired encoding of the text.
+			string encoding;
+			switch (castInst->getEncoding()) {
+				case StringLiteralInst::Encoding::UTF8: {
+					encoding = "UTF8";
+					break;
+				}
+				case StringLiteralInst::Encoding::UTF16: {
+					encoding = "UTF16";
+					break;
+				}
+				case StringLiteralInst::Encoding::ObjCSelector: {
+					encoding = "ObjCSelector";
+					break;
+				}
+			}
+			outs     << "\t\t\t\t [ENCODING]: " << encoding << "\n";
+
+			// Count: encoding-based length of the string literal in code units.
+			uint64_t codeUnitCount = castInst->getCodeUnitCount();
+			outs     << "\t\t\t\t [COUNT]: " << codeUnitCount << "\n";
+
+			// Call WALA in Java
+			jobject walaConstant = wala.makeConstant(value);
+			wala.print(walaConstant);
 			break;
 		}
 		
@@ -724,7 +796,7 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 				instrInfo.num = i;
 				instrInfo.modInfo = &modInfo;
 				instrInfo.funcInfo = &funcInfo;
-				instrInfo.instrKind = getInstrValueKindInfo(*instr);
+				instrInfo.instrKind = getInstrValueKindInfo(*instr, wala);
 
 				// Get each operand <SILValue> and save it in a vector; get instr ID
 				ArrayRef<Operand> ops = instr->getAllOperands();
