@@ -56,3 +56,9 @@ compile_commands.json
 SortedCFDatabase.def
 htmlcov
 .coverage
+
+
+
+#
+#Symlink to the swiftc script
+swiftc
