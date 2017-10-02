@@ -243,7 +243,7 @@ ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr, WALAIntegrati
 		}
 		
 		case ValueKind::ConstStringLiteralInst: {
- 			outfile		<< "\t\t << ConstStringLiteralInst >>" << "\n";
+ 			outs		<< "\t\t << ConstStringLiteralInst >>" << "\n";
 			// Cast the instr to access methods
 			ConstStringLiteralInst *castInst = cast<ConstStringLiteralInst>(&instr);
 			 			// Value: the string data for the literal, in UTF-8.
@@ -253,16 +253,12 @@ ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr, WALAIntegrati
 			// Encoding: the desired encoding of the text.
 			string encoding;
 			switch (castInst->getEncoding()) {
-				case StringLiteralInst::Encoding::UTF8: {
+				case ConstStringLiteralInst::Encoding::UTF8: {
 					encoding = "UTF8";
 					break;
 				}
-				case StringLiteralInst::Encoding::UTF16: {
+				case ConstStringLiteralInst::Encoding::UTF16: {
 					encoding = "UTF16";
-					break;
-				}
-				case StringLiteralInst::Encoding::ObjCSelector: {
-					encoding = "ObjCSelector";
 					break;
 				}
 			}
