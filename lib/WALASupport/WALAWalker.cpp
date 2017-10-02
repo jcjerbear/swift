@@ -189,7 +189,11 @@ ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr, WALAIntegrati
 		}
 		
 		case ValueKind::IntegerLiteralInst: {
-// 			outfile		<< "\t\t << IntegerLiteralInst >>" << "\n";
+			outs	<< "\t\t << IntegerLiteralInst >>" << "\n";
+			IntegerLiteralInst castInt = static_cast<IntegerLiteralInst>(instr);
+			// outs << "<<IntegerLiteralInst>>" << std::endl;
+			APInt val = castInt.getValue();
+			jobject walaInt = wala.makeConstant(val);
 			break;
 		}
 		
