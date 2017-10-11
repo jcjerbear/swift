@@ -1,4 +1,4 @@
-#include <stdlib.h>
+ #include <stdlib.h>
 #include <jni.h>
 #include <csetjmp>
 #include <fstream>
@@ -55,6 +55,10 @@ jobject WALAIntegration::makePosition(int fl, int fc, int ll, int lc) {
 
 jobject WALAIntegration::makeConstant(string value) {
 	return CAst->makeConstant(value.c_str());
+}
+
+jobject WALAIntegration::makeNode(int kind){
+	return CAst->makeNode(kind);
 }
 
 void WALAIntegration::print(jobject obj) {
@@ -170,16 +174,16 @@ ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr, WALAIntegrati
 	
 		case ValueKind::ApplyInst: {
 		
-// 			outfile 	<< "\t\t << ApplyInst >>" << "\n";
+ 			outs 	<< "\t\t << ApplyInst >>" << "\n";
 		
 			// Cast the instr 
-// 			ApplyInst *castInst = cast<ApplyInst>(&instr);
+ 			ApplyInst *castInst = cast<ApplyInst>(&instr);
 			
 			// Iterate args and output SILValue
-// 			for (unsigned i = 0; i < applyInst->getNumArguments(); ++i) {
-// 				SILValue v = applyInst->getArgument(i);
-// 				outfile 	<< "\t\t\t\t [ARG] #" << i << ": " << v;
-// 			}
+ 			for (unsigned i = 0; i < castInst->getNumArguments(); ++i) {
+ 				SILValue v = castInst->getArgument(i);
+ 				outs 	<< "\t\t\t\t [ARG] #" << i << ": " << v;
+ 			}
 			break;
 		}
 		
@@ -190,6 +194,8 @@ ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr, WALAIntegrati
 		
 		case ValueKind::IntegerLiteralInst: {
 // 			outfile		<< "\t\t << IntegerLiteralInst >>" << "\n";
+			jobject walaNode = wala.makeNode(20);
+			wala.print(walaNode);
 			break;
 		}
 		
