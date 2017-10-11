@@ -18,6 +18,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <string>
+#include <unordered_map>
 
 #include "swift/SIL/SILModule.h"
 #include "llvm/Support/FileSystem.h"
@@ -32,6 +33,7 @@
 //and possibly the "mandatory optimization pipeline"
 
 using std::string;
+using std::unordered_map;
 
 namespace swift {
 
@@ -90,6 +92,8 @@ public:
 private:
 	bool printStdout = false;
 // 	llvm::raw_fd_ostream &outfile;
+
+	unordered_map<SILInstruction*, jobject> allNodes;
 	
 	// Gets the mangled and demangled SILFunction and returns in a FunctionInfo.
 	WALAWalker::FunctionInfo getSILFunctionInfo(SILFunction &func);

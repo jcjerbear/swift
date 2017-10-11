@@ -8,19 +8,20 @@ namespace swift {
 class InstrKindInfoGetter {
 public:
 	// If not NULL, debugging info will be printed via outs
-	InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, raw_ostream* outs = NULL);
+	InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, unordered_map<SILInstruction*, jobject>* allNodes, raw_ostream* outs = NULL);
 	
 	ValueKind get();
 private:
 	// member variables
 	SILInstruction* instr;
 	WALAIntegration* wala;
+	unordered_map<SILInstruction*, jobject>* allNodes;
 	raw_ostream* outs;
 
 	// member functions
 	void handleApplyInst();
-	void handleStringLiteralInst();
-	void handleConstStringLiteralInst();
+	jobject handleStringLiteralInst();
+	jobject handleConstStringLiteralInst();
 	void handleFunctionRefInst();
 };
 
