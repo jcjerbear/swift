@@ -49,6 +49,7 @@ public:
 	
 	jobject makePosition(int, int, int, int);
 	jobject makeConstant(string value);
+	jobject makeNode(int kind);
 	
 	WALAIntegration(JNIEnv *, Exceptions &, const char *);
 };
