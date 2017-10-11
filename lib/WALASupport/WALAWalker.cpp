@@ -155,7 +155,7 @@ ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr, WALAIntegrati
 
 	// The giant switch statement is replaced by InstrKindInfoGetter here
 	// -- Chen Song
-	InstrKindInfoGetter instrKindInfoGetter(&instr, &wala, &outs);
+	InstrKindInfoGetter instrKindInfoGetter(&instr, &wala, &allNodes, &outs);
 
 	return instrKindInfoGetter.get();
 }

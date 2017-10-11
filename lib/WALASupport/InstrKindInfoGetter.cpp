@@ -5,9 +5,10 @@
 using namespace swift;
 using std::string;
 
-InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, raw_ostream* outs) {
+InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, unordered_map<SILInstruction*, jobject>* allNodes, raw_ostream* outs) {
 	this->instr = instr;
 	this->wala = wala;
+	this->allNodes = allNodes;
 	this->outs = outs;
 }
 
@@ -43,7 +44,7 @@ void InstrKindInfoGetter::handleApplyInst() {
 	}
 }
 
-void InstrKindInfoGetter::handleStringLiteralInst() {
+jobject InstrKindInfoGetter::handleStringLiteralInst() {
 	// ValueKind indentifier
 	if (outs != NULL) {
 		*outs << "<< StringLiteralInst >>" << "\n";
@@ -86,9 +87,10 @@ void InstrKindInfoGetter::handleStringLiteralInst() {
 
 	// Call WALA in Java
 	jobject walaConstant = wala->makeConstant(value);
+	return walaConstant;
 }
 
-void InstrKindInfoGetter::handleConstStringLiteralInst() {
+jobject InstrKindInfoGetter::handleConstStringLiteralInst() {
 	// ValueKind indentifier
 	if (outs != NULL) {
 		*outs << "<< handleConstStringLiteralInst >>" << "\n";
@@ -127,6 +129,7 @@ void InstrKindInfoGetter::handleConstStringLiteralInst() {
 
 	// Call WALA in Java
 	jobject walaConstant = wala->makeConstant(value);
+	return walaConstant;
 }
 
 void InstrKindInfoGetter::handleFunctionRefInst() {
@@ -151,6 +154,7 @@ void InstrKindInfoGetter::handleFunctionRefInst() {
 
 ValueKind InstrKindInfoGetter::get() {
 	auto instrKind = instr->getKind();
+	jobject node;
 
 	switch (instrKind) {
 	
@@ -187,12 +191,12 @@ ValueKind InstrKindInfoGetter::get() {
 		}
 		
 		case ValueKind::StringLiteralInst: {
-			handleStringLiteralInst();
+			node = handleStringLiteralInst();
 			break;
 		}
 		
 		case ValueKind::ConstStringLiteralInst: {
-			handleConstStringLiteralInst();
+			node = handleConstStringLiteralInst();
 			break;
 		}
 		
@@ -654,5 +658,6 @@ ValueKind InstrKindInfoGetter::get() {
 		}
 	}
 
+	allNodes->insert(std::make_pair(instr, node)); // insert the node into the hash map
 	return instrKind;
 }
