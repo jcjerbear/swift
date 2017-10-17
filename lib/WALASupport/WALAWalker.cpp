@@ -154,6 +154,8 @@ ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr, WALAIntegrati
 
 	raw_ostream& outs = llvm::outs();
 
+	outs << "address of instr: " << &instr << "\n";
+
 	// The giant switch statement is replaced by InstrKindInfoGetter here
 	// -- Chen Song
 	InstrKindInfoGetter instrKindInfoGetter(&instr, &wala, &allNodes, &outs);
@@ -227,6 +229,7 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 				instrInfo.ops = llvm::ArrayRef<SILValue>(vals);
 				
 				// Pass instrInfo to perInstruction, where actions can be taken
+				llvm::outs() << "\tisASTNode(): " << instr->getLoc().isASTNode() << "\n";
 				perInstruction(&instrInfo, wala);
 				
 				++i;
@@ -255,7 +258,6 @@ void WALAWalker::perInstruction(InstrInfo *instrInfo, WALAIntegration &wala) {
 	);
 
 	if (this->printStdout) {
-
 		outs << "\t [INSTR] #" << instrInfo->num;
 		outs << ", [OPNUM] " << instrInfo->id << "\n";
 		outs << "\t --> File: " << instrInfo->Filename << "\n";
