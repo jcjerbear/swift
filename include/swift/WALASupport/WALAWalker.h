@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "swift/SIL/SILModule.h"
 #include "llvm/Support/FileSystem.h"
@@ -34,6 +35,7 @@
 
 using std::string;
 using std::unordered_map;
+using std::vector;
 
 namespace swift {
 
@@ -51,7 +53,10 @@ public:
 	
 	jobject makePosition(int, int, int, int);
 	jobject makeConstant(string value);
+	jobject makeConstant(int value);
 	jobject makeNode(int kind);
+	jobject makeNode(int kind,jobject chr1,jobject chr2,jobject chr3);
+	jobject makeNode(int kind, jobject chr1, jobject chr2);
 	
 	WALAIntegration(JNIEnv *, Exceptions &, const char *);
 };

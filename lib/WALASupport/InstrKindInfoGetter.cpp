@@ -31,33 +31,53 @@ void InstrKindInfoGetter::handleApplyInst() {
 	//    create a built-in operator node for it
 	// else
 	//    create a function calling node for it
-
 	// there are 2 possibilities: 
 	//   1. the function is a built-in operator in WALA
 	//   2. the function is not a built-in operator in WALA
-	for (unsigned i = 0; i < castInst->getNumArguments(); ++i) {
+	vector<jobject> params;
+	for (unsigned i = 0; i < castInst->getNumArguments()-1; ++i) {
 		SILValue v = castInst->getArgument(i);
+		jobject chrd_node = (*allNodes).at((SILInstruction *)v.getOpaqueValue());
+		if(chrd_node){
+			//*outs << "\t [ARG] #" << i << ": " << "\n";
+			wala->print(chrd_node);
+			params.push_back(chrd_node);
+		}
 		// ValueKind argumentKind = v->getKind();
+		/*
 		if (outs != NULL) {
 			*outs << "\t [ARG] #" << i << ": " << v << "\n";
-		}
+			*outs << "\t [ADDR] #" << i << ":" << v.getOpaqueValue() << "\n";
+		}*/
 	}
+	jobject func_call;
+	switch(params.size()){
+		case 2:
+			func_call = wala->makeNode(13,params[0],params[1]);
+			break;
+		case 3:
+			func_call = wala->makeNode(13,params[0],params[1],params[2]);
+			break;
+	}
+	wala->print(func_call);
 }
 
 jobject InstrKindInfoGetter::handleStringLiteralInst() {
 	// ValueKind indentifier
+	/*
 	if (outs != NULL) {
 		*outs << "<< StringLiteralInst >>" << "\n";
-	}
+	}*/
 
 	// Cast the instr to access methods
 	StringLiteralInst *castInst = cast<StringLiteralInst>(instr);
 
 	// Value: the string data for the literal, in UTF-8.
 	StringRef value = castInst->getValue();
+	/*
 	if (outs != NULL) {
 		*outs << "\t [value] " << value << "\n";
-	}
+	}*/
 
 	// Encoding: the desired encoding of the text.
 	string encoding;
@@ -75,18 +95,22 @@ jobject InstrKindInfoGetter::handleStringLiteralInst() {
 			break;
 		}
 	}
+	/*
 	if (outs != NULL) {
 		*outs << "\t [encoding] " << encoding << "\n";
-	}
+	}*/
 
 	// Count: encoding-based length of the string literal in code units.
 	uint64_t codeUnitCount = castInst->getCodeUnitCount();
+	/*
 	if (outs != NULL) {
 		*outs << "\t [codeUnitCount] " << codeUnitCount << "\n";
-	}
+	}*/
 
 	// Call WALA in Java
 	jobject walaConstant = wala->makeConstant(value);
+	allNodes->insert(std::make_pair(instr,walaConstant));
+	//*outs << "\t [addr of SILinstr]:" << instr << "\t [addr of jobject]:" << walaConstant << "\n";
 	return walaConstant;
 }
 
@@ -129,6 +153,7 @@ jobject InstrKindInfoGetter::handleConstStringLiteralInst() {
 
 	// Call WALA in Java
 	jobject walaConstant = wala->makeConstant(value);
+	allNodes->insert(std::make_pair(instr,walaConstant));
 	return walaConstant;
 }
 
@@ -182,6 +207,12 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::IntegerLiteralInst: {
 // 			outfile		<< "\t << IntegerLiteralInst >>" << "\n";
+			IntegerLiteralInst* castInst = cast<IntegerLiteralInst>(instr);
+			APInt value = castInst->getValue();
+			jobject walaConstant= wala->makeConstant(value.getSExtValue());
+			allNodes->insert(std::make_pair(instr,walaConstant));
+			//jobject ope = wala->makeNode(CAstWrapper::LOOP);
+			//wala->print(walaConstant);
 			break;
 		}
 		
