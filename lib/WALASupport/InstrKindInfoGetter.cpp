@@ -1,18 +1,20 @@
 #include "swift/WALASupport/InstrKindInfoGetter.h"
 #include "swift/Demangling/Demangle.h"
 #include <string>
+#include <list>
 
 using namespace swift;
 using std::string;
+using std::list;
 
-InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, unordered_map<SILInstruction*, jobject>* allNodes, raw_ostream* outs) {
+InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, unordered_map<void*, jobject>* allNodes, raw_ostream* outs) {
 	this->instr = instr;
 	this->wala = wala;
 	this->allNodes = allNodes;
 	this->outs = outs;
 }
 
-void InstrKindInfoGetter::handleApplyInst() {
+jobject InstrKindInfoGetter::handleApplyInst() {
 	// ValueKind indentifier
 	if (outs != NULL) {
 		*outs << "<< ApplyInst >>" << "\n";
@@ -21,32 +23,43 @@ void InstrKindInfoGetter::handleApplyInst() {
 	// Cast the instr 
 	ApplyInst *castInst = cast<ApplyInst>(instr);
 
-	// Iterate args and output SILValue (to check argument types)
 	string funcName = Demangle::demangleSymbolAsString(castInst->getReferencedFunction()->getName());
 	if (outs != NULL) {
 		*outs << "\t [funcName] " << funcName << "\n";
 	}
+	jobject nameNode = wala->makeConstant(funcName.c_str());
 
 	// if (funcName indicates that castInst is an built-in operator)
 	//    create a built-in operator node for it
 	// else
 	//    create a function calling node for it
-
 	// there are 2 possibilities: 
 	//   1. the function is a built-in operator in WALA
 	//   2. the function is not a built-in operator in WALA
-
+	list<jobject> params;
 	for (unsigned i = 0; i < castInst->getNumArguments(); ++i) {
 		SILValue v = castInst->getArgument(i);
-		// ValueKind argumentKind = v->getKind();
+		if (allNodes->find(v.getOpaqueValue()) != allNodes->end()) {
+			jobject child = allNodes->at(v.getOpaqueValue());
+			params.push_back(child);
+		} else {
+			// This should not happen in the end after we finish this class. We should have a CAst node in the map for each and every argument
+		}
+
 		if (outs != NULL) {
-			*outs << "\t [ARG] #" << i << ": " << v.getOpaqueValue() << "\n";
+			*outs << "\t [ARG] #" << i << ": " << v;
+			*outs << "\t [ADDR] #" << i << ":" << v.getOpaqueValue() << "\n";
 		}
 	}
+
+	jobject call = (*wala)->makeNode(102, nameNode, (*wala)->makeArray(&params)); // 102 stands for CALL
+
+	return call;
 }
 
 jobject InstrKindInfoGetter::handleStringLiteralInst() {
 	// ValueKind indentifier
+	
 	if (outs != NULL) {
 		*outs << "<< StringLiteralInst >>" << "\n";
 	}
@@ -56,6 +69,7 @@ jobject InstrKindInfoGetter::handleStringLiteralInst() {
 
 	// Value: the string data for the literal, in UTF-8.
 	StringRef value = castInst->getValue();
+	
 	if (outs != NULL) {
 		*outs << "\t [value] " << value << "\n";
 	}
@@ -76,18 +90,21 @@ jobject InstrKindInfoGetter::handleStringLiteralInst() {
 			break;
 		}
 	}
+	
 	if (outs != NULL) {
 		*outs << "\t [encoding] " << encoding << "\n";
 	}
 
 	// Count: encoding-based length of the string literal in code units.
 	uint64_t codeUnitCount = castInst->getCodeUnitCount();
+	
 	if (outs != NULL) {
 		*outs << "\t [codeUnitCount] " << codeUnitCount << "\n";
 	}
 
 	// Call WALA in Java
 	jobject walaConstant = wala->makeConstant(value);
+	allNodes->insert(std::make_pair(instr,walaConstant));
 	return walaConstant;
 }
 
@@ -130,6 +147,7 @@ jobject InstrKindInfoGetter::handleConstStringLiteralInst() {
 
 	// Call WALA in Java
 	jobject walaConstant = wala->makeConstant(value);
+
 	return walaConstant;
 }
 
@@ -155,7 +173,7 @@ void InstrKindInfoGetter::handleFunctionRefInst() {
 
 ValueKind InstrKindInfoGetter::get() {
 	auto instrKind = instr->getKind();
-	jobject node;
+	jobject node = nullptr;
 
 	switch (instrKind) {
 	
@@ -172,7 +190,7 @@ ValueKind InstrKindInfoGetter::get() {
 		}
 	
 		case ValueKind::ApplyInst: {
-			handleApplyInst();
+			node = handleApplyInst();
 			break;
 		}
 		
@@ -183,6 +201,9 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::IntegerLiteralInst: {
 			*outs << "<< IntegerLiteralInst >>" << "\n";
+			IntegerLiteralInst* castInst = cast<IntegerLiteralInst>(instr);
+			APInt value = castInst->getValue();
+			node = wala->makeConstant(value.getSExtValue());
 			break;
 		}
 		
@@ -228,7 +249,6 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::FunctionRefInst: {
 			handleFunctionRefInst();
-
 			break;
 		}
 		
@@ -659,6 +679,9 @@ ValueKind InstrKindInfoGetter::get() {
 		}
 	}
 
-	allNodes->insert(std::make_pair(instr, node)); // insert the node into the hash map
+	if (node != nullptr) {
+		allNodes->insert(std::make_pair(instr, node)); // insert the node into the hash map
+		wala->print(node);
+	}
 	return instrKind;
 }
