@@ -54,24 +54,6 @@ jobject WALAIntegration::makePosition(int fl, int fc, int ll, int lc) {
 	return result;
 }
 
-jobject WALAIntegration::makeConstant(string value) {
-	return CAst->makeConstant(value.c_str());
-}
-
-jobject WALAIntegration::makeConstant(int value){
-	return CAst->makeConstant(value);
-}
-
-jobject WALAIntegration::makeNode(int kind){
-	return CAst->makeNode(kind);
-}
-jobject WALAIntegration::makeNode(int kind, jobject chr1, jobject chr2){
-	return CAst->makeNode(kind,chr1,chr2);
-}
-jobject WALAIntegration::makeNode(int kind,jobject chr1,jobject chr2,jobject chr3){
-	return CAst->makeNode(kind,chr1,chr2,chr3);
-}
-
 void WALAIntegration::print(jobject obj) {
 	print_object(java_env, obj);
 	THROW_ANY_EXCEPTION(cpp_ex);
@@ -168,7 +150,7 @@ ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr, WALAIntegrati
 
 	raw_ostream& outs = llvm::outs();
 
-	outs << "address of instr: " << &instr << "\n";
+	outs << "address of instr below me: " << &instr << "\n";
 
 	// The giant switch statement is replaced by InstrKindInfoGetter here
 	// -- Chen Song

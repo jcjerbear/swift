@@ -50,11 +50,6 @@ public:
 	void print(jobject obj);
 	
 	jobject makePosition(int, int, int, int);
-	jobject makeConstant(string value);
-	jobject makeConstant(int value);
-	jobject makeNode(int kind);
-	jobject makeNode(int kind,jobject chr1,jobject chr2,jobject chr3);
-	jobject makeNode(int kind, jobject chr1, jobject chr2);
 	
 	WALAIntegration(JNIEnv *, Exceptions &, const char *);
 };

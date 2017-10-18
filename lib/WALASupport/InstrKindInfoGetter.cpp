@@ -1,5 +1,6 @@
 #include "swift/WALASupport/InstrKindInfoGetter.h"
 #include "swift/Demangling/Demangle.h"
+#include "CAstWrapper.h"
 #include <string>
 #include <list>
 
@@ -14,47 +15,57 @@ InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration*
 	this->outs = outs;
 }
 
+bool InstrKindInfoGetter::isBuiltInFunction(SILFunction* function) {
+	return Demangle::demangleSymbolAsString(function->getName()) == "static Swift.String.+ infix(Swift.String, Swift.String) -> Swift.String";
+}
+
 jobject InstrKindInfoGetter::handleApplyInst() {
 	// ValueKind indentifier
 	if (outs != NULL) {
 		*outs << "<< ApplyInst >>" << "\n";
 	}
 
+	jobject node = nullptr; // the CAst node to be created
+
 	// Cast the instr 
 	ApplyInst *castInst = cast<ApplyInst>(instr);
-
-	string funcName = Demangle::demangleSymbolAsString(castInst->getReferencedFunction()->getName());
-	if (outs != NULL) {
-		*outs << "\t [funcName] " << funcName << "\n";
-	}
-	jobject nameNode = wala->makeConstant(funcName.c_str());
-
-	// if (funcName indicates that castInst is an built-in operator)
-	//    create a built-in operator node for it
-	// else
-	//    create a function calling node for it
-	// there are 2 possibilities: 
-	//   1. the function is a built-in operator in WALA
-	//   2. the function is not a built-in operator in WALA
-	list<jobject> params;
-	for (unsigned i = 0; i < castInst->getNumArguments(); ++i) {
-		SILValue v = castInst->getArgument(i);
-		if (allNodes->find(v.getOpaqueValue()) != allNodes->end()) {
-			jobject child = allNodes->at(v.getOpaqueValue());
-			params.push_back(child);
-		} else {
-			// This should not happen in the end after we finish this class. We should have a CAst node in the map for each and every argument
-		}
-
+	if (isBuiltInFunction(castInst->getReferencedFunction())) {
 		if (outs != NULL) {
-			*outs << "\t [ARG] #" << i << ": " << v;
-			*outs << "\t [ADDR] #" << i << ":" << v.getOpaqueValue() << "\n";
+			*outs << "\tThis is an built-in operator\n";
 		}
+		if (Demangle::demangleSymbolAsString(castInst->getReferencedFunction()->getName()) == "static Swift.String.+ infix(Swift.String, Swift.String) -> Swift.String") {
+			jobject firstOperand = allNodes->at(castInst->getArgument(0).getOpaqueValue());
+			jobject secondOperand = allNodes->at(castInst->getArgument(1).getOpaqueValue());
+			node = (*wala)->makeNode(105, CAstWrapper::OP_ADD, firstOperand, secondOperand); // 105 is BINARY_EXPR
+		}
+	} else {
+		if (allNodes->find(castInst->getReferencedFunction()) == allNodes->end()) {
+			if (outs != NULL) {
+				*outs << "something terribly wrong happens: failed to find the CAst node for the callee\n";
+			}
+		}
+		jobject funcExprNode = allNodes->at(castInst->getReferencedFunction());
+
+		list<jobject> params;
+		for (unsigned i = 0; i < castInst->getNumArguments(); ++i) {
+			SILValue v = castInst->getArgument(i);
+			if (allNodes->find(v.getOpaqueValue()) != allNodes->end()) {
+				jobject child = allNodes->at(v.getOpaqueValue());
+				params.push_back(child);
+			} else {
+				// This should not happen in the end after we finish this class. We should have a CAst node in the map for each and every argument
+			}
+
+			if (outs != NULL) {
+				*outs << "\t [ARG] #" << i << ": " << v;
+				*outs << "\t [ADDR] #" << i << ": " << v.getOpaqueValue() << "\n";
+			}
+		}
+		node = (*wala)->makeNode(102, funcExprNode, (*wala)->makeArray(&params)); // 102 stands for CALL
 	}
 
-	jobject call = (*wala)->makeNode(102, nameNode, (*wala)->makeArray(&params)); // 102 stands for CALL
-
-	return call;
+	allNodes->insert(std::make_pair(castInst, node)); // insert the node into the hash map
+	return node;
 }
 
 jobject InstrKindInfoGetter::handleStringLiteralInst() {
@@ -103,8 +114,10 @@ jobject InstrKindInfoGetter::handleStringLiteralInst() {
 	}
 
 	// Call WALA in Java
-	jobject walaConstant = wala->makeConstant(value);
-	allNodes->insert(std::make_pair(instr,walaConstant));
+	jobject walaConstant = (*wala)->makeConstant(((string)value).c_str());
+
+	allNodes->insert(std::make_pair(castInst, walaConstant));
+
 	return walaConstant;
 }
 
@@ -146,12 +159,14 @@ jobject InstrKindInfoGetter::handleConstStringLiteralInst() {
 	}
 
 	// Call WALA in Java
-	jobject walaConstant = wala->makeConstant(value);
+	jobject walaConstant = (*wala)->makeConstant(((string)value).c_str());
+
+	allNodes->insert(std::make_pair(castInst, walaConstant));
 
 	return walaConstant;
 }
 
-void InstrKindInfoGetter::handleFunctionRefInst() {
+jobject InstrKindInfoGetter::handleFunctionRefInst() {
 	// ValueKind identifier
 	if (outs != NULL) {
 		*outs << "<< FunctionRefInst >>" << "\n";
@@ -159,16 +174,19 @@ void InstrKindInfoGetter::handleFunctionRefInst() {
 
 	// Cast the instr to access methods
 	FunctionRefInst *castInst = cast<FunctionRefInst>(instr);
-
-	// Demangled FunctionRef name
-	if (outs != NULL) {
-		*outs << "=== [FUNC] Ref'd: ";
-	}
 	
 	string funcName = Demangle::demangleSymbolAsString(castInst->getReferencedFunction()->getName());
+	jobject nameNode = (*wala)->makeConstant(funcName.c_str());
+	jobject funcExprNode = (*wala)->makeNode(100, nameNode); // 100 is FUNCTION_EXPR
+
 	if (outs != NULL) {
+		*outs << "=== [FUNC] Ref'd: ";
 		*outs << funcName << "\n";
 	}
+
+	allNodes->insert(std::make_pair(castInst->getReferencedFunction(), funcExprNode));
+
+	return funcExprNode;
 }
 
 ValueKind InstrKindInfoGetter::get() {
@@ -203,7 +221,8 @@ ValueKind InstrKindInfoGetter::get() {
 			*outs << "<< IntegerLiteralInst >>" << "\n";
 			IntegerLiteralInst* castInst = cast<IntegerLiteralInst>(instr);
 			APInt value = castInst->getValue();
-			node = wala->makeConstant(value.getSExtValue());
+			node = (*wala)->makeConstant(value.getSExtValue());
+			allNodes->insert(std::make_pair(castInst, node));
 			break;
 		}
 		
@@ -680,7 +699,6 @@ ValueKind InstrKindInfoGetter::get() {
 	}
 
 	if (node != nullptr) {
-		allNodes->insert(std::make_pair(instr, node)); // insert the node into the hash map
 		wala->print(node);
 	}
 	return instrKind;

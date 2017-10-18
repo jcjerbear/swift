@@ -19,10 +19,12 @@ private:
 	raw_ostream* outs;
 
 	// member functions
+	bool isBuiltInFunction(SILFunction* function);
+
 	jobject handleApplyInst();
 	jobject handleStringLiteralInst();
 	jobject handleConstStringLiteralInst();
-	void handleFunctionRefInst();
+	jobject handleFunctionRefInst();
 };
 
 } // end namespace swift
