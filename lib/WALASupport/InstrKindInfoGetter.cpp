@@ -152,6 +152,7 @@ void InstrKindInfoGetter::handleFunctionRefInst() {
 	}
 }
 
+
 ValueKind InstrKindInfoGetter::get() {
 	auto instrKind = instr->getKind();
 	jobject node;
@@ -181,7 +182,8 @@ ValueKind InstrKindInfoGetter::get() {
 		}
 		
 		case ValueKind::IntegerLiteralInst: {
-// 			outfile		<< "\t << IntegerLiteralInst >>" << "\n";
+			*outs << "\t << IntegerLiteralInst >>" << "\n";
+			std::cout << "Got into Integer."<<std::endl;
 			break;
 		}
 		
