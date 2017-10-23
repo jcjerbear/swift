@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <string>
 #include <unordered_map>
+#include <list>
 
 #include "swift/SIL/SILModule.h"
 #include "llvm/Support/FileSystem.h"
@@ -34,6 +35,7 @@
 
 using std::string;
 using std::unordered_map;
+using std::list;
 
 namespace swift {
 
@@ -91,7 +93,7 @@ private:
 	bool printStdout = false;
 // 	llvm::raw_fd_ostream &outfile;
 
-	unordered_map<void*, jobject> allNodes;
+	
 	
 	// Gets the mangled and demangled SILFunction and returns in a FunctionInfo.
 	WALAWalker::FunctionInfo getSILFunctionInfo(SILFunction &func);
@@ -102,7 +104,7 @@ private:
 	
 	// The big one - gets the ValueKind of the SILInstruction then goes 			
 	// through the mega-switch to cast and handle each appropriately.
-	ValueKind getInstrValueKindInfo(SILInstruction &instr, WALAIntegration &wala);
+	ValueKind getInstrValueKindInfo(SILInstruction &instr, WALAIntegration &wala, unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList);
 
 	// Do something per instruction
 	void perInstruction(WALAWalker::InstrInfo *instrInfo, WALAIntegration &);
