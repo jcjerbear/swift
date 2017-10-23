@@ -14,7 +14,7 @@ InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration*
 	this->instr = instr;
 	this->wala = wala;
 	this->nodeMap = nodeMap;
-	this->nodeList = nodeList;
+	this->nodeList = nodeList; // top level CAst nodes only
 	this->outs = outs;
 }
 
@@ -212,7 +212,7 @@ jobject InstrKindInfoGetter::handleFunctionRefInst() {
 	
 	string funcName = Demangle::demangleSymbolAsString(castInst->getReferencedFunction()->getName());
 	jobject nameNode = (*wala)->makeConstant(funcName.c_str());
-	jobject funcExprNode = (*wala)->makeNode(100, nameNode); // 100 is FUNCTION_EXPR
+	jobject funcExprNode = (*wala)->makeNode(CAstWrapper::FUNCTION_EXPR, nameNode);
 
 	if (outs != NULL) {
 		*outs << "=== [FUNC] Ref'd: ";
@@ -253,14 +253,26 @@ jobject InstrKindInfoGetter::handleBranchInst() {
 	// Cast the instr to access methods
 	BranchInst *castInst = cast<BranchInst>(instr);
 
+	// This is an unconditional branch
+	jobject gotoNode = nullptr;
+
+	// Destination block
 	int i = 0;
-	for (auto value : castInst->getArgs()) {
-		if (outs != NULL) {
-			*outs << "\t [OP" << i++ << "]: " << value.getOpaqueValue() << "\n";
+	SILBasicBlock* destBasicBlock = castInst->getDestBB();
+	if (outs != NULL) {
+		*outs << "\t [DESTBB]: " << destBasicBlock << "\n";
+		if (destBasicBlock != NULL) {
+			for (auto& instr : *destBasicBlock) {
+				*outs << "\t\t [INST" << i++ << "]: " << &instr << "\n";
+			}
 		}
 	}
+	if (destBasicBlock != NULL) {
+		jobject labelNode = (*wala)->makeConstant(std::to_string(destBasicBlock->getDebugID()).c_str());
+		gotoNode = (*wala)->makeNode(CAstWrapper::GOTO, labelNode);
+	}
 
-	return nullptr;
+	return gotoNode;
 }
 
 jobject InstrKindInfoGetter::handleCondBranchInst() {
@@ -271,7 +283,6 @@ jobject InstrKindInfoGetter::handleCondBranchInst() {
 
 	// Cast the instr to access methods
 	CondBranchInst *castInst = cast<CondBranchInst>(instr);
-
 
 	// 1. Condition
 	SILValue cond = castInst->getCondition();
@@ -414,7 +425,7 @@ ValueKind InstrKindInfoGetter::get() {
 		}
 		
 		case ValueKind::FunctionRefInst: {
-			handleFunctionRefInst();
+			node = handleFunctionRefInst();
 			break;
 		}
 		
