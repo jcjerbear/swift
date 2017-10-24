@@ -50,8 +50,6 @@ public:
 	void print(jobject obj);
 	
 	jobject makePosition(int, int, int, int);
-	jobject makeConstant(string value);
-	jobject makeNode(int kind);
 	
 	WALAIntegration(JNIEnv *, Exceptions &, const char *);
 };
@@ -93,7 +91,7 @@ private:
 	bool printStdout = false;
 // 	llvm::raw_fd_ostream &outfile;
 
-	unordered_map<SILInstruction*, jobject> allNodes;
+	unordered_map<void*, jobject> allNodes;
 	
 	// Gets the mangled and demangled SILFunction and returns in a FunctionInfo.
 	WALAWalker::FunctionInfo getSILFunctionInfo(SILFunction &func);

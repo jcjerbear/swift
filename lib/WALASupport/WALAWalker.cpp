@@ -54,10 +54,6 @@ jobject WALAIntegration::makePosition(int fl, int fc, int ll, int lc) {
 	return result;
 }
 
-jobject WALAIntegration::makeConstant(string value) {
-	return CAst->makeConstant(value.c_str());
-}
-
 void WALAIntegration::print(jobject obj) {
 	print_object(java_env, obj);
 	THROW_ANY_EXCEPTION(cpp_ex);
@@ -153,6 +149,8 @@ void WALAWalker::getInstrSrcInfo(SILInstruction &instr, InstrInfo *instrInfo) {
 ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr, WALAIntegration &wala) {
 	raw_ostream& outs = llvm::outs();
 
+	outs << "address of instr below me: " << &instr << "\n";
+
 	// The giant switch statement is replaced by InstrKindInfoGetter here
 	// -- Chen Song
 	InstrKindInfoGetter instrKindInfoGetter(&instr, &wala, &allNodes, &outs);
@@ -182,7 +180,7 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 	
 	const char *file_name = strdup(modInfo.sourcefile.str().c_str());
 	
-	JNIEnv *java_env = launch(classpath);
+	JNIEnv *java_env = launch_jvm(classpath);
 	TRY(cpp_ex, java_env)		
 		WALAIntegration wala(java_env, cpp_ex, file_name);
 		jobject x = wala->makeConstant(3.7);
@@ -226,6 +224,7 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 				instrInfo.ops = llvm::ArrayRef<SILValue>(vals);
 				
 				// Pass instrInfo to perInstruction, where actions can be taken
+				llvm::outs() << "\tisASTNode(): " << instr->getLoc().isASTNode() << "\n";
 				perInstruction(&instrInfo, wala);
 				
 				++i;
@@ -254,7 +253,6 @@ void WALAWalker::perInstruction(InstrInfo *instrInfo, WALAIntegration &wala) {
 	);
 
 	if (this->printStdout) {
-
 		outs << "\t [INSTR] #" << instrInfo->num;
 		outs << ", [OPNUM] " << instrInfo->id << "\n";
 		outs << "\t --> File: " << instrInfo->Filename << "\n";

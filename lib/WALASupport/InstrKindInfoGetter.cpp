@@ -1,51 +1,83 @@
 #include "swift/WALASupport/InstrKindInfoGetter.h"
 #include "swift/Demangling/Demangle.h"
+#include "CAstWrapper.h"
 #include <string>
+#include <list>
+#include <cassert>
 
 using namespace swift;
 using std::string;
+using std::list;
 
-InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, unordered_map<SILInstruction*, jobject>* allNodes, raw_ostream* outs) {
+InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, unordered_map<void*, jobject>* allNodes, raw_ostream* outs) {
 	this->instr = instr;
 	this->wala = wala;
 	this->allNodes = allNodes;
 	this->outs = outs;
+	*outs << "HELOOOoooooooooooooooooooooooooooooooooooo$$$$$$$$\n";
+	std::cout<< "YOU SUCK"<<std::endl;
+	std::cout<< "Did this."<<std::endl;
+
+	*outs<<"12345\n";
+
 }
 
-void InstrKindInfoGetter::handleApplyInst() {
+bool InstrKindInfoGetter::isBuiltInFunction(SILFunction* function) {
+	return Demangle::demangleSymbolAsString(function->getName()) == "static Swift.String.+ infix(Swift.String, Swift.String) -> Swift.String";
+}
+
+jobject InstrKindInfoGetter::handleApplyInst() {
 	// ValueKind indentifier
 	if (outs != NULL) {
 		*outs << "<< ApplyInst >>" << "\n";
 	}
 
+	jobject node = nullptr; // the CAst node to be created
+
 	// Cast the instr 
 	ApplyInst *castInst = cast<ApplyInst>(instr);
-
-	// Iterate args and output SILValue (to check argument types)
-	string funcName = Demangle::demangleSymbolAsString(castInst->getReferencedFunction()->getName());
-	if (outs != NULL) {
-		*outs << "\t [funcName] " << funcName << "\n";
-	}
-
-	// if (funcName indicates that castInst is an built-in operator)
-	//    create a built-in operator node for it
-	// else
-	//    create a function calling node for it
-
-	// there are 2 possibilities: 
-	//   1. the function is a built-in operator in WALA
-	//   2. the function is not a built-in operator in WALA
-	for (unsigned i = 0; i < castInst->getNumArguments(); ++i) {
-		SILValue v = castInst->getArgument(i);
-		// ValueKind argumentKind = v->getKind();
+	if (isBuiltInFunction(castInst->getReferencedFunction())) {
 		if (outs != NULL) {
-			*outs << "\t [ARG] #" << i << ": " << v << "\n";
+			*outs << "\tThis is an built-in operator\n";
 		}
+		if (Demangle::demangleSymbolAsString(castInst->getReferencedFunction()->getName()) == "static Swift.String.+ infix(Swift.String, Swift.String) -> Swift.String") {
+			jobject firstOperand = allNodes->at(castInst->getArgument(0).getOpaqueValue());
+			jobject secondOperand = allNodes->at(castInst->getArgument(1).getOpaqueValue());
+			node = (*wala)->makeNode(105, CAstWrapper::OP_ADD, firstOperand, secondOperand); // 105 is BINARY_EXPR
+		}
+	} else {
+		if (allNodes->find(castInst->getReferencedFunction()) == allNodes->end()) {
+			if (outs != NULL) {
+				*outs << "something terribly wrong happens: failed to find the CAst node for the callee\n";
+			}
+		}
+		jobject funcExprNode = allNodes->at(castInst->getReferencedFunction());
+
+		list<jobject> params;
+		for (unsigned i = 0; i < castInst->getNumArguments(); ++i) {
+			SILValue v = castInst->getArgument(i);
+			if (allNodes->find(v.getOpaqueValue()) != allNodes->end()) {
+				jobject child = allNodes->at(v.getOpaqueValue());
+				params.push_back(child);
+			} else {
+				// This should not happen in the end after we finish this class. We should have a CAst node in the map for each and every argument
+			}
+
+			if (outs != NULL) {
+				*outs << "\t [ARG] #" << i << ": " << v;
+				*outs << "\t [ADDR] #" << i << ": " << v.getOpaqueValue() << "\n";
+			}
+		}
+		node = (*wala)->makeNode(102, funcExprNode, (*wala)->makeArray(&params)); // 102 stands for CALL
 	}
+
+	allNodes->insert(std::make_pair(castInst, node)); // insert the node into the hash map
+	return node;
 }
 
 jobject InstrKindInfoGetter::handleStringLiteralInst() {
 	// ValueKind indentifier
+	
 	if (outs != NULL) {
 		*outs << "<< StringLiteralInst >>" << "\n";
 	}
@@ -55,6 +87,7 @@ jobject InstrKindInfoGetter::handleStringLiteralInst() {
 
 	// Value: the string data for the literal, in UTF-8.
 	StringRef value = castInst->getValue();
+	
 	if (outs != NULL) {
 		*outs << "\t [value] " << value << "\n";
 	}
@@ -75,20 +108,35 @@ jobject InstrKindInfoGetter::handleStringLiteralInst() {
 			break;
 		}
 	}
+	
 	if (outs != NULL) {
 		*outs << "\t [encoding] " << encoding << "\n";
 	}
 
 	// Count: encoding-based length of the string literal in code units.
 	uint64_t codeUnitCount = castInst->getCodeUnitCount();
+	
 	if (outs != NULL) {
 		*outs << "\t [codeUnitCount] " << codeUnitCount << "\n";
 	}
 
 	// Call WALA in Java
-	jobject walaConstant = wala->makeConstant(value);
+	jobject walaConstant = (*wala)->makeConstant(((string)value).c_str());
+
+	allNodes->insert(std::make_pair(castInst, walaConstant));
+
 	return walaConstant;
 }
+jobject InstrKindInfoGetter::handleIntegerLiteralIns(){
+	assert(outs != NULL);
+	*outs << "<< IntegerLiteralInst >>\n";
+	IntegerLiteralInst *castedInst = cast<IntegerLiteralInst>(instr);
+	APInt val = castedInst->getValue();
+	jobject walaConstant = nullptr;
+	return walaConstant;
+}
+
+
 
 jobject InstrKindInfoGetter::handleConstStringLiteralInst() {
 	// ValueKind indentifier
@@ -128,11 +176,14 @@ jobject InstrKindInfoGetter::handleConstStringLiteralInst() {
 	}
 
 	// Call WALA in Java
-	jobject walaConstant = wala->makeConstant(value);
+	jobject walaConstant = (*wala)->makeConstant(((string)value).c_str());
+
+	allNodes->insert(std::make_pair(castInst, walaConstant));
+
 	return walaConstant;
 }
 
-void InstrKindInfoGetter::handleFunctionRefInst() {
+jobject InstrKindInfoGetter::handleFunctionRefInst() {
 	// ValueKind identifier
 	if (outs != NULL) {
 		*outs << "<< FunctionRefInst >>" << "\n";
@@ -140,55 +191,62 @@ void InstrKindInfoGetter::handleFunctionRefInst() {
 
 	// Cast the instr to access methods
 	FunctionRefInst *castInst = cast<FunctionRefInst>(instr);
-
-	// Demangled FunctionRef name
-	if (outs != NULL) {
-		*outs << "=== [FUNC] Ref'd: ";
-	}
 	
 	string funcName = Demangle::demangleSymbolAsString(castInst->getReferencedFunction()->getName());
+	jobject nameNode = (*wala)->makeConstant(funcName.c_str());
+	jobject funcExprNode = (*wala)->makeNode(100, nameNode); // 100 is FUNCTION_EXPR
+
 	if (outs != NULL) {
+		*outs << "=== [FUNC] Ref'd: ";
 		*outs << funcName << "\n";
 	}
+
+	allNodes->insert(std::make_pair(castInst->getReferencedFunction(), funcExprNode));
+
+	return funcExprNode;
 }
 
 
 ValueKind InstrKindInfoGetter::get() {
 	auto instrKind = instr->getKind();
-	jobject node;
+	jobject node = nullptr;
 
 	switch (instrKind) {
 	
 		case ValueKind::SILPHIArgument:
 		case ValueKind::SILFunctionArgument:
 		case ValueKind::SILUndef: {		
-// 			outfile		<< "\t << Not an instruction >>" << "\n";
+			*outs << "<< Not an instruction >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::AllocBoxInst: {
-// 			outfile		<< "\t << AllocBoxInst >>" << "\n";
+			*outs << "<< AllocBoxInst >>" << "\n";
 			break;
 		}
 	
 		case ValueKind::ApplyInst: {
-			handleApplyInst();
+			node = handleApplyInst();
 			break;
 		}
 		
 		case ValueKind::PartialApplyInst: {
-// 			outfile		<< "\t << PartialApplyInst >>" << "\n";
+			*outs << "<< PartialApplyInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::IntegerLiteralInst: {
-			*outs << "\t << IntegerLiteralInst >>" << "\n";
-			std::cout << "Got into Integer."<<std::endl;
+
+			*outs << "<< IntegerLiteralInst >>" << "\n";
+			// IntegerLiteralInst* castInst = cast<IntegerLiteralInst>(instr);
+			// APInt value = castInst->getValue();
+			// node = (*wala)->makeConstant(value.getSExtValue());
+			// allNodes->insert(std::make_pair(castInst, node));
 			break;
 		}
 		
 		case ValueKind::FloatLiteralInst: {
-// 			outfile		<< "\t << FloatLiteralInst >>" << "\n";
+			*outs << "<< FloatLiteralInst >>" << "\n";
 			break;
 		}
 		
@@ -203,38 +261,37 @@ ValueKind InstrKindInfoGetter::get() {
 		}
 		
 		case ValueKind::AllocValueBufferInst: {
-// 			outfile		<< "\t << AllocValueBufferInst >>" << "\n";
+			*outs << "<< AllocValueBufferInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::ProjectValueBufferInst: {
-// 			outfile		<< "\t << ProjectValueBufferInst >>" << "\n";
+			*outs << "<< ProjectValueBufferInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::DeallocValueBufferInst: {
-// 			outfile		<< "\t << DeallocValueBufferInst >>" << "\n";
+			*outs << "<< DeallocValueBufferInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::ProjectBoxInst: {
-// 			outfile		<< "\t << ProjectBoxInst >>" << "\n";
+			*outs << "<< ProjectBoxInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::ProjectExistentialBoxInst: {
-// 			outfile		<< "\t << ProjectExistentialBoxInst >>" << "\n";
+			*outs << "<< ProjectExistentialBoxInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::FunctionRefInst: {
 			handleFunctionRefInst();
-
 			break;
 		}
 		
 		case ValueKind::BuiltinInst: {
-// 			outfile		<< "\t << BuiltinInst >>" << "\n";
+			*outs << "<< BuiltinInst >>" << "\n";
 			break;
 		}
 		
@@ -244,7 +301,7 @@ ValueKind InstrKindInfoGetter::get() {
 		case ValueKind::OpenExistentialMetatypeInst:
 		case ValueKind::OpenExistentialRefInst:
 		case ValueKind::OpenExistentialValueInst: {
-// 			outfile		<< "\t << OpenExistential[Addr/Box/BoxValue/Metatype/Ref/Value]Inst >>" << "\n";
+			*outs << "<< OpenExistential[Addr/Box/BoxValue/Metatype/Ref/Value]Inst >>" << "\n";
 			break;
 		}
 		
@@ -252,52 +309,52 @@ ValueKind InstrKindInfoGetter::get() {
 		// DEFCOUNTING_INSTRUCTION(ID) <see ParseSIL.cpp:2255>
 		
 		case ValueKind::DebugValueInst: {
-// 			outfile		<< "\t << DebugValueInst >>" << "\n";
+			*outs << "<< DebugValueInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::DebugValueAddrInst: {
-// 			outfile		<< "\t << DebugValueAddrInst >>" << "\n";
+			*outs << "<< DebugValueAddrInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::UncheckedOwnershipConversionInst: {
-// 			outfile		<< "\t << UncheckedOwnershipConversionInst >>" << "\n";
+			*outs << "<< UncheckedOwnershipConversionInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::LoadInst: {
-// 			outfile		<< "\t << LoadInst >>" << "\n";
+			*outs << "<< LoadInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::LoadBorrowInst: {
-// 			outfile		<< "\t << LoadBorrowInst >>" << "\n";
+			*outs << "<< LoadBorrowInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::BeginBorrowInst: {
-// 			outfile		<< "\t << BeginBorrowInst >>" << "\n";
+			*outs << "<< BeginBorrowInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::LoadUnownedInst: {
-// 			outfile		<< "\t << LoadUnownedInst >>" << "\n";
+			*outs << "<< LoadUnownedInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::LoadWeakInst: {
-// 			outfile		<< "\t << LoadWeakInst >>" << "\n";
+			*outs << "<< LoadWeakInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::MarkDependenceInst: {
-// 			outfile		<< "\t << MarkDependenceInst >>" << "\n";
+			*outs << "<< MarkDependenceInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::KeyPathInst: {
-// 			outfile		<< "\t << KeyPathInst >>" << "\n";
+			*outs << "<< KeyPathInst >>" << "\n";
 			break;
 		}
 		
@@ -323,61 +380,61 @@ ValueKind InstrKindInfoGetter::get() {
 		case ValueKind::ConvertFunctionInst:
 		case ValueKind::ObjCExistentialMetatypeToObjectInst:
 		case ValueKind::ObjCMetatypeToObjectInst: {
-// 			outfile		<< "\t << Conversion Instruction >>" << "\n";
+			*outs << "<< Conversion Instruction >>" << "\n";
   			break;
   		}
   		
   		case ValueKind::PointerToAddressInst: {
-// 			outfile		<< "\t << PointerToAddressInst >>" << "\n";
+			*outs << "<< PointerToAddressInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::RefToBridgeObjectInst: {
-// 			outfile		<< "\t << RefToBridgeObjectInst >>" << "\n";
+			*outs << "<< RefToBridgeObjectInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::UnconditionalCheckedCastAddrInst:
 		case ValueKind::CheckedCastAddrBranchInst:
 		case ValueKind::UncheckedRefCastAddrInst: {
-// 			outfile		<< "\t << Indirect checked conversion instruction >>" << "\n";
+			*outs << "<< Indirect checked conversion instruction >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::UnconditionalCheckedCastValueInst: {
-// 			outfile		<< "\t << UnconditionalCheckedCastValueInst >>" << "\n";
+			*outs << "<< UnconditionalCheckedCastValueInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::UnconditionalCheckedCastInst:
 		case ValueKind::CheckedCastValueBranchInst:
 		case ValueKind::CheckedCastBranchInst: {
-// 			outfile		<< "\t << Checked conversion instruction >>" << "\n";
+			*outs << "<< Checked conversion instruction >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::MarkUninitializedInst: {
-// 			outfile		<< "\t << MarkUninitializedInst >>" << "\n";
+			*outs << "<< MarkUninitializedInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::MarkUninitializedBehaviorInst: {
-// 			outfile		<< "\t << MarkUninitializedBehaviorInst >>" << "\n";
+			*outs << "<< MarkUninitializedBehaviorInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::MarkFunctionEscapeInst: {
-// 			outfile		<< "\t << MarkFunctionEscapeInst >>" << "\n";
+			*outs << "<< MarkFunctionEscapeInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::StoreInst: {
-// 			outfile		<< "\t << StoreInst >>" << "\n";
+			*outs << "<< StoreInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::EndBorrowInst: {
-// 			outfile		<< "\t << EndBorrowInst >>" << "\n";
+			*outs << "<< EndBorrowInst >>" << "\n";
 			break;
 		}
 		
@@ -385,7 +442,7 @@ ValueKind InstrKindInfoGetter::get() {
 		case ValueKind::BeginUnpairedAccessInst:
 		case ValueKind::EndAccessInst:
 		case ValueKind::EndUnpairedAccessInst: {
-// 			outfile		<< "\t << Access Instruction >>" << "\n";
+			*outs << "<< Access Instruction >>" << "\n";
 			break;
 		}
 		
@@ -393,264 +450,264 @@ ValueKind InstrKindInfoGetter::get() {
 		case ValueKind::AssignInst:
 		case ValueKind::StoreUnownedInst:
 		case ValueKind::StoreWeakInst: {
-// 			outfile		<< "\t << Access Instruction >>" << "\n";
+			*outs << "<< Access Instruction >>" << "\n";
 			break;
 		}
 
 		case ValueKind::AllocStackInst: {
-// 			outfile		<< "\t << AllocStack Instruction >>" << "\n";
+			*outs << "<< AllocStack Instruction >>" << "\n";
 			break;
 		}
 		case ValueKind::MetatypeInst: {		
-// 			outfile		<< "\t << MetatypeInst >>" << "\n";
+			*outs << "<< MetatypeInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::AllocRefInst:
 		case ValueKind::AllocRefDynamicInst: {
-// 			outfile		<< "\t << Alloc[Ref/RefDynamic] Instruction >>" << "\n";
+			*outs << "<< Alloc[Ref/RefDynamic] Instruction >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::DeallocStackInst: {		
-// 			outfile		<< "\t << DeallocStackInst >>" << "\n";
+			*outs << "<< DeallocStackInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::DeallocRefInst: {		
-// 			outfile		<< "\t << DeallocRefInst >>" << "\n";
+			*outs << "<< DeallocRefInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::DeallocPartialRefInst: {		
-// 			outfile		<< "\t << DeallocPartialRefInst >>" << "\n";
+			*outs << "<< DeallocPartialRefInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::DeallocBoxInst: {		
-// 			outfile		<< "\t << DeallocBoxInst >>" << "\n";
+			*outs << "<< DeallocBoxInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::ValueMetatypeInst: 
 		case ValueKind::ExistentialMetatypeInst: {		
-// 			outfile		<< "\t << [Value/Existential]MetatypeInst >>" << "\n";
+			*outs << "<< [Value/Existential]MetatypeInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::DeallocExistentialBoxInst: {		
-// 			outfile		<< "\t << DeallocExistentialBoxInst >>" << "\n";
+			*outs << "<< DeallocExistentialBoxInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::TupleInst: {		
-// 			outfile		<< "\t << TupleInst >>" << "\n";
+			*outs << "<< TupleInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::EnumInst: {		
-// 			outfile		<< "\t << EnumInst >>" << "\n";
+			*outs << "<< EnumInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::InitEnumDataAddrInst:
 		case ValueKind::UncheckedEnumDataInst:
 		case ValueKind::UncheckedTakeEnumDataAddrInst: {		
-// 			outfile		<< "\t << EnumData Instruction >>" << "\n";
+			*outs << "<< EnumData Instruction >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::InjectEnumAddrInst: {		
-// 			outfile		<< "\t << InjectEnumAddrInst >>" << "\n";
+			*outs << "<< InjectEnumAddrInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::TupleElementAddrInst:
 		case ValueKind::TupleExtractInst: {		
-// 			outfile		<< "\t << Tuple Instruction >>" << "\n";
+			*outs << "<< Tuple Instruction >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::ReturnInst: {		
-// 			outfile		<< "\t << ReturnInst >>" << "\n";
+			*outs << "<< ReturnInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::ThrowInst: {		
-// 			outfile		<< "\t << ThrowInst >>" << "\n";
+			*outs << "<< ThrowInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::BranchInst: {		
-// 			outfile		<< "\t << BranchInst >>" << "\n";
+			*outs << "<< BranchInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::CondBranchInst: {		
-// 			outfile		<< "\t << CondBranchInst >>" << "\n";
+			*outs << "<< CondBranchInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::UnreachableInst: {		
-// 			outfile		<< "\t << UnreachableInst >>" << "\n";
+			*outs << "<< UnreachableInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::ClassMethodInst:
 		case ValueKind::SuperMethodInst:
 		case ValueKind::DynamicMethodInst: {		
-// 			outfile		<< "\t << DeallocRefInst >>" << "\n";
+			*outs << "<< DeallocRefInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::WitnessMethodInst: {		
-// 			outfile		<< "\t << WitnessMethodInst >>" << "\n";
+			*outs << "<< WitnessMethodInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::CopyAddrInst: {		
-// 			outfile		<< "\t << CopyAddrInst >>" << "\n";
+			*outs << "<< CopyAddrInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::BindMemoryInst: {		
-// 			outfile		<< "\t << BindMemoryInst >>" << "\n";
+			*outs << "<< BindMemoryInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::StructInst: {		
-// 			outfile		<< "\t << StructInst >>" << "\n";
+			*outs << "<< StructInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::StructElementAddrInst:
 		case ValueKind::StructExtractInst: {		
-// 			outfile		<< "\t << Struct Instruction >>" << "\n";
+			*outs << "<< Struct Instruction >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::RefElementAddrInst: {		
-// 			outfile		<< "\t << RefElementAddrInst >>" << "\n";
+			*outs << "<< RefElementAddrInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::RefTailAddrInst: {		
-// 			outfile		<< "\t << RefTailAddrInst >>" << "\n";
+			*outs << "<< RefTailAddrInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::IsNonnullInst: {		
-// 			outfile		<< "\t << IsNonnullInst >>" << "\n";
+			*outs << "<< IsNonnullInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::IndexAddrInst: {		
-// 			outfile		<< "\t << IndexAddrInst >>" << "\n";
+			*outs << "<< IndexAddrInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::TailAddrInst: {		
-// 			outfile		<< "\t << TailAddrInst >>" << "\n";
+			*outs << "<< TailAddrInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::IndexRawPointerInst: {		
-// 			outfile		<< "\t << IndexRawPointerInst >>" << "\n";
+			*outs << "<< IndexRawPointerInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::ObjCProtocolInst: {		
-// 			outfile		<< "\t << ObjCProtocolInst >>" << "\n";
+			*outs << "<< ObjCProtocolInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::AllocGlobalInst: {		
-// 			outfile		<< "\t << AllocGlobalInst >>" << "\n";
+			*outs << "<< AllocGlobalInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::GlobalAddrInst: {		
-// 			outfile		<< "\t << GlobalAddrInst >>" << "\n";
+			*outs << "<< GlobalAddrInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::SelectEnumInst: {		
-// 			outfile		<< "\t << SelectEnumInst >>" << "\n";
+			*outs << "<< SelectEnumInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::SelectEnumAddrInst: {		
-// 			outfile		<< "\t << DeallocRefInst >>" << "\n";
+			*outs << "<< DeallocRefInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::SwitchEnumInst: {		
-// 			outfile		<< "\t << SwitchEnumInst >>" << "\n";
+			*outs << "<< SwitchEnumInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::SwitchEnumAddrInst: {		
-// 			outfile		<< "\t << SwitchEnumAddrInst >>" << "\n";
+			*outs << "<< SwitchEnumAddrInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::SwitchValueInst: {		
-// 			outfile		<< "\t << SwitchValueInst >>" << "\n";
+			*outs << "<< SwitchValueInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::SelectValueInst: {		
-// 			outfile		<< "\t << SelectValueInst >>" << "\n";
+			*outs << "<< SelectValueInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::DeinitExistentialAddrInst: {		
-// 			outfile		<< "\t << DeinitExistentialAddrInst >>" << "\n";
+			*outs << "<< DeinitExistentialAddrInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::DeinitExistentialValueInst: {		
-// 			outfile		<< "\t << DeinitExistentialValueInst >>" << "\n";
+			*outs << "<< DeinitExistentialValueInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::InitExistentialAddrInst: {		
-// 			outfile		<< "\t << InitExistentialAddrInst >>" << "\n";
+			*outs << "<< InitExistentialAddrInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::InitExistentialValueInst: {		
-// 			outfile		<< "\t << InitExistentialValueInst >>" << "\n";
+			*outs << "<< InitExistentialValueInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::AllocExistentialBoxInst: {		
-// 			outfile		<< "\t << AllocExistentialBoxInst >>" << "\n";
+			*outs << "<< AllocExistentialBoxInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::InitExistentialRefInst: {		
-// 			outfile		<< "\t << InitExistentialRefInst >>" << "\n";
+			*outs << "<< InitExistentialRefInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::InitExistentialMetatypeInst: {		
-// 			outfile		<< "\t << InitExistentialMetatypeInst >>" << "\n";
+			*outs << "<< InitExistentialMetatypeInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::DynamicMethodBranchInst: {		
-// 			outfile		<< "\t << DynamicMethodBranchInst >>" << "\n";
+			*outs << "<< DynamicMethodBranchInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::ProjectBlockStorageInst: {		
-// 			outfile		<< "\t << ProjectBlockStorageInst >>" << "\n";
+			*outs << "<< ProjectBlockStorageInst >>" << "\n";
 			break;
 		}
 		
 		case ValueKind::InitBlockStorageHeaderInst: {		
-// 			outfile		<< "\t << InitBlockStorageHeaderInst >>" << "\n";
+			*outs << "<< InitBlockStorageHeaderInst >>" << "\n";
 			break;
 		}		
 		
@@ -660,6 +717,8 @@ ValueKind InstrKindInfoGetter::get() {
 		}
 	}
 
-	allNodes->insert(std::make_pair(instr, node)); // insert the node into the hash map
+	if (node != nullptr) {
+		wala->print(node);
+	}
 	return instrKind;
 }
