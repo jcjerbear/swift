@@ -21,7 +21,7 @@ InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration*
 	this->nodeList = nodeList; // top level CAst nodes only
 	this->labeller = labeller;
 	this->outs = outs;
-	*outs << "HELOOOoooooooooooooooooooooooooooooooooooo$$$$$$$$\n";
+	(*outs) << "HELOOOoooooooooooooooooooooooooooooooooooo$$$$$$$$\n";
 	std::cout<< "YOU SUCK"<<std::endl;
 	std::cout<< "Did this."<<std::endl;
 
@@ -170,12 +170,16 @@ jobject InstrKindInfoGetter::handleStringLiteralInst() {
 
 	return walaConstant;
 }
+
+/*
+Handling the integer literal object
+*/
 jobject InstrKindInfoGetter::handleIntegerLiteralInst(){
 	assert(outs != NULL);
 	*outs << "<< IntegerLiteralInst >>\n";
 	IntegerLiteralInst *castedInst = cast<IntegerLiteralInst>(instr);
 	APInt val = castedInst->getValue();
-	jobject walaConstant = nullptr;
+	jobject walaConstant = (*wala)->makeConstant( );
 	return walaConstant;
 }
 
