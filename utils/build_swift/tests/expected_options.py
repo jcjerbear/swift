@@ -164,6 +164,10 @@ EXPECTED_DEFAULTS = {
     'test_optimize_for_size': None,
     'test_optimized': None,
     'test_osx': False,
+<<<<<<< HEAD
+=======
+    'test_paths': [],
+>>>>>>> c25f096a227b24c3acebb0a8cd57f30ff3df4532
     'test_tvos': False,
     'test_tvos_device': False,
     'test_tvos_simulator': False,
@@ -482,6 +486,10 @@ EXPECTED_OPTIONS = [
     AppendOption('--extra-swift-args', dest='extra_swift_args'),
     AppendOption('--stdlib-deployment-targets',
                  dest='stdlib_deployment_targets'),
+<<<<<<< HEAD
+=======
+    AppendOption('--test-paths', dest='test_paths'),
+>>>>>>> c25f096a227b24c3acebb0a8cd57f30ff3df4532
 
     UnsupportedOption('--build-jobs'),
     UnsupportedOption('--common-cmake-options'),

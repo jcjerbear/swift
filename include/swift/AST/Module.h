@@ -502,9 +502,11 @@ public:
 
 private:
   // Make placement new and vanilla new/delete illegal for Modules.
+#if !defined(SWIG) && !defined(SWIG_COMPILE)
   void *operator new(size_t Bytes) throw() = delete;
   void operator delete(void *Data) throw() SWIFT_DELETE_OPERATOR_DELETED;
   void *operator new(size_t Bytes, void *Mem) throw() = delete;
+#endif
 public:
   // Only allow allocation of Modules using the allocator in ASTContext
   // or by doing a placement new.
@@ -767,7 +769,11 @@ static inline unsigned alignOfFileUnit() {
 /// the REPL). Since it contains raw source, it must be parsed and name-bound
 /// before being used for anything; a full type-check is also necessary for
 /// IR generation.
-class SourceFile final : public FileUnit {
+class SourceFile 
+#ifndef SWIG
+final
+#endif
+: public FileUnit {
 public:
   class LookupCache;
   class Impl;
@@ -1096,7 +1102,11 @@ private:
 
 /// This represents the compiler's implicitly generated declarations in the
 /// Builtin module.
-class BuiltinUnit final : public FileUnit {
+class BuiltinUnit
+#ifndef SWIG
+final
+#endif
+: public FileUnit {
 public:
   class LookupCache;
 

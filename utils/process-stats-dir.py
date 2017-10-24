@@ -239,7 +239,11 @@ def compare_stats(args, old_stats, new_stats):
         old = old_stats[name]
         new = new_stats.get(name, 0)
         (delta, delta_pct) = diff_and_pct(old, new)
+<<<<<<< HEAD
         if (name.startswith("time.") and
+=======
+        if ((name.startswith("time.") or '.time.' in name) and
+>>>>>>> c25f096a227b24c3acebb0a8cd57f30ff3df4532
            abs(delta) < args.delta_usec_thresh):
             continue
         if abs(delta_pct) < args.delta_pct_thresh:

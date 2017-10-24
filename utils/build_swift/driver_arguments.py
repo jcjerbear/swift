@@ -192,6 +192,19 @@ def _apply_default_arguments(args):
     if args.test_optimize_for_size:
         args.test = True
 
+<<<<<<< HEAD
+=======
+    # --test-paths implies --test and/or --validation-test
+    # depending on what directories/files have been specified.
+    if args.test_paths:
+        for path in args.test_paths:
+            if path.startswith('test'):
+                args.test = True
+            elif path.startswith('validation-test'):
+                args.test = True
+                args.validation_test = True
+
+>>>>>>> c25f096a227b24c3acebb0a8cd57f30ff3df4532
     # If none of tests specified skip swift stdlib test on all platforms
     if not args.test and not args.validation_test and not args.long_test:
         args.test_linux = False
@@ -572,6 +585,15 @@ def create_argument_parser():
         help="run the validation test suite (implies --test)",
         action=arguments.action.optional_bool)
     run_tests_group.add_argument(
+<<<<<<< HEAD
+=======
+        "--test-paths",
+        help="run tests located in specific directories and/or files \
+        (implies --test and/or --validation-test)",
+        action=arguments.action.concat, type=arguments.type.shell_split,
+        default=[])
+    run_tests_group.add_argument(
+>>>>>>> c25f096a227b24c3acebb0a8cd57f30ff3df4532
         "-o",
         help="run the test suite in optimized mode too (implies --test)",
         action="store_const",
