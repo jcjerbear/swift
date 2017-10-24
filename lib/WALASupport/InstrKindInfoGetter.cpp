@@ -10,11 +10,15 @@ using namespace swift;
 using std::string;
 using std::list;
 
-InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList, raw_ostream* outs) {
+InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, 
+										unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList, 
+										BasicBlockLabeller* labeller,
+										raw_ostream* outs) {
 	this->instr = instr;
 	this->wala = wala;
 	this->nodeMap = nodeMap;
-	this->nodeList = nodeList;
+	this->nodeList = nodeList; // top level CAst nodes only
+	this->labeller = labeller;
 	this->outs = outs;
 }
 
@@ -216,7 +220,7 @@ jobject InstrKindInfoGetter::handleFunctionRefInst() {
 	
 	string funcName = Demangle::demangleSymbolAsString(castInst->getReferencedFunction()->getName());
 	jobject nameNode = (*wala)->makeConstant(funcName.c_str());
-	jobject funcExprNode = (*wala)->makeNode(100, nameNode); // 100 is FUNCTION_EXPR
+	jobject funcExprNode = (*wala)->makeNode(CAstWrapper::FUNCTION_EXPR, nameNode);
 
 	if (outs != NULL) {
 		*outs << "=== [FUNC] Ref'd: ";
@@ -257,14 +261,26 @@ jobject InstrKindInfoGetter::handleBranchInst() {
 	// Cast the instr to access methods
 	BranchInst *castInst = cast<BranchInst>(instr);
 
+	// This is an unconditional branch
+	jobject gotoNode = nullptr;
+
+	// Destination block
 	int i = 0;
-	for (auto value : castInst->getArgs()) {
-		if (outs != NULL) {
-			*outs << "\t [OP" << i++ << "]: " << value.getOpaqueValue() << "\n";
+	SILBasicBlock* destBasicBlock = castInst->getDestBB();
+	if (outs != NULL) {
+		*outs << "\t [DESTBB]: " << destBasicBlock << "\n";
+		if (destBasicBlock != NULL) {
+			for (auto& instr : *destBasicBlock) {
+				*outs << "\t\t [INST" << i++ << "]: " << &instr << "\n";
+			}
 		}
 	}
+	if (destBasicBlock != NULL) {
+		jobject labelNode = (*wala)->makeConstant(labeller->label(destBasicBlock).c_str());
+		gotoNode = (*wala)->makeNode(CAstWrapper::GOTO, labelNode);
+	}
 
-	return nullptr;
+	return gotoNode;
 }
 
 jobject InstrKindInfoGetter::handleCondBranchInst() {
@@ -275,7 +291,6 @@ jobject InstrKindInfoGetter::handleCondBranchInst() {
 
 	// Cast the instr to access methods
 	CondBranchInst *castInst = cast<CondBranchInst>(instr);
-
 
 	// 1. Condition
 	SILValue cond = castInst->getCondition();
@@ -305,7 +320,7 @@ jobject InstrKindInfoGetter::handleCondBranchInst() {
 		}
 	}
 	if (trueBasicBlock != NULL) {
-		jobject labelNode = (*wala)->makeConstant(std::to_string(trueBasicBlock->getDebugID()).c_str());
+		jobject labelNode = (*wala)->makeConstant(labeller->label(trueBasicBlock).c_str());
 		trueGotoNode = (*wala)->makeNode(CAstWrapper::GOTO, labelNode);
 	}
 
@@ -322,7 +337,7 @@ jobject InstrKindInfoGetter::handleCondBranchInst() {
 		}
 	}
 	if (falseBasicBlock != NULL) {
-		jobject labelNode = (*wala)->makeConstant(std::to_string(falseBasicBlock->getDebugID()).c_str());
+		jobject labelNode = (*wala)->makeConstant(labeller->label(falseBasicBlock).c_str());
 		falseGotoNode = (*wala)->makeNode(CAstWrapper::GOTO, labelNode);
 	}
 
@@ -418,7 +433,7 @@ ValueKind InstrKindInfoGetter::get() {
 		}
 		
 		case ValueKind::FunctionRefInst: {
-			handleFunctionRefInst();
+			node = handleFunctionRefInst();
 			break;
 		}
 		

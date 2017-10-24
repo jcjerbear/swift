@@ -146,15 +146,15 @@ void WALAWalker::getInstrSrcInfo(SILInstruction &instr, InstrInfo *instrInfo) {
 // Gets the ValueKind of the SILInstruction then goes through the mega-switch to handle 
 // appropriately.  
 // TODO: currently only returns ValueKind, switch is not descended into functionally
-ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr, WALAIntegration &wala, unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList) {
+ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr, WALAIntegration &wala, 
+											unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList,
+											BasicBlockLabeller* labeller) {
 
 	raw_ostream& outs = llvm::outs();
 
 	outs << "address of instr below me: " << &instr << "\n";
 
-	// The giant switch statement is replaced by InstrKindInfoGetter here
-	// -- Chen Song
-	InstrKindInfoGetter instrKindInfoGetter(&instr, &wala, nodeMap, nodeList, &outs);
+	InstrKindInfoGetter instrKindInfoGetter(&instr, &wala, nodeMap, nodeList, labeller, &outs);
 
 	return instrKindInfoGetter.get();
 }
@@ -192,6 +192,7 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 	
 		FunctionInfo funcInfo = getSILFunctionInfo(*func);
 		list<jobject>* blockStmtList = new list<jobject>();
+		BasicBlockLabeller* labeller = new BasicBlockLabeller();
 
 		// Iterate over SILBasicBlocks
 		for (auto bb = func->begin(); bb != func->end(); ++bb) {
@@ -214,7 +215,7 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 				instrInfo.num = i;
 				instrInfo.modInfo = &modInfo;
 				instrInfo.funcInfo = &funcInfo;
-				instrInfo.instrKind = getInstrValueKindInfo(*instr, wala, nodeMap, nodeList);
+				instrInfo.instrKind = getInstrValueKindInfo(*instr, wala, nodeMap, nodeList, labeller);
 
 				// Get each operand <SILValue> and save it in a vector; get instr ID
 				ArrayRef<Operand> ops = instr->getAllOperands();
@@ -236,7 +237,7 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 			}	// end SILInstruction
 
 			if (nodeList->size() > 0) {
-				jobject labelNode = wala->makeConstant(std::to_string(bb->getDebugID()).c_str());
+				jobject labelNode = wala->makeConstant(labeller->label(&*bb).c_str());
 				jobject labelStmt = wala->makeNode(CAstWrapper::LABEL_STMT, labelNode, nodeList->front());
 				nodeList->pop_front();
 				nodeList->push_front(labelStmt);
@@ -250,6 +251,7 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 			wala.print(blockStmt);
 		}
 		delete blockStmtList;
+		delete labeller;
 	}	// end SILFunction
 	
 	START_CATCH_BLOCK()

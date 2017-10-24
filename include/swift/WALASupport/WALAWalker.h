@@ -23,6 +23,7 @@
 
 #include "swift/SIL/SILModule.h"
 #include "llvm/Support/FileSystem.h"
+#include "swift/WALASupport/BasicBlockLabeller.h"
 
 #include "Exceptions.h"
 #include "CAstWrapper.h"
@@ -104,7 +105,9 @@ private:
 	
 	// The big one - gets the ValueKind of the SILInstruction then goes 			
 	// through the mega-switch to cast and handle each appropriately.
-	ValueKind getInstrValueKindInfo(SILInstruction &instr, WALAIntegration &wala, unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList);
+	ValueKind getInstrValueKindInfo(SILInstruction &instr, WALAIntegration &wala, 
+									unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList,
+									BasicBlockLabeller* labeller);
 
 	// Do something per instruction
 	void perInstruction(WALAWalker::InstrInfo *instrInfo, WALAIntegration &);
