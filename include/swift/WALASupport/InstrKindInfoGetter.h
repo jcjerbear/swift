@@ -36,7 +36,7 @@ private:
 	jobject handleBranchInst();
 	jobject handleCondBranchInst();
 	jobject handleAssignInst();
-
+	jobject handleIntegerLiteralInst();
 };
 
 } // end namespace swift

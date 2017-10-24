@@ -170,7 +170,7 @@ jobject InstrKindInfoGetter::handleStringLiteralInst() {
 
 	return walaConstant;
 }
-jobject InstrKindInfoGetter::handleIntegerLiteralIns(){
+jobject InstrKindInfoGetter::handleIntegerLiteralInst(){
 	assert(outs != NULL);
 	*outs << "<< IntegerLiteralInst >>\n";
 	IntegerLiteralInst *castedInst = cast<IntegerLiteralInst>(instr);
@@ -371,9 +371,7 @@ jobject InstrKindInfoGetter::handleCondBranchInst() {
 	return ifStmtNode;
 }
 
-<<<<<<< HEAD
 
-=======
 jobject InstrKindInfoGetter::handleAssignInst(){
 	*outs << "<<Assign Instruction>>" << "\n";
 	AssignInst *castInst = cast<AssignInst>(instr);
@@ -395,7 +393,7 @@ jobject InstrKindInfoGetter::handleAssignInst(){
 	nodeMap->insert(std::make_pair(castInst,assign_node));
 	return assign_node;
 }
->>>>>>> 65ee7c3fc0767ca8655ffb91b402be2e15f24068
+
 ValueKind InstrKindInfoGetter::get() {
 	auto instrKind = instr->getKind();
 	jobject node = nullptr;
@@ -428,17 +426,11 @@ ValueKind InstrKindInfoGetter::get() {
 		case ValueKind::IntegerLiteralInst: {
 
 			*outs << "<< IntegerLiteralInst >>" << "\n";
-<<<<<<< HEAD
-			// IntegerLiteralInst* castInst = cast<IntegerLiteralInst>(instr);
-			// APInt value = castInst->getValue();
-			// node = (*wala)->makeConstant(value.getSExtValue());
-			// allNodes->insert(std::make_pair(castInst, node));
-=======
+
 			IntegerLiteralInst* castInst = cast<IntegerLiteralInst>(instr);
 			APInt value = castInst->getValue();
 			node = (*wala)->makeConstant((int)value.getSExtValue());
 			nodeMap->insert(std::make_pair(castInst, node));
->>>>>>> 65ee7c3fc0767ca8655ffb91b402be2e15f24068
 			break;
 		}
 		
