@@ -108,7 +108,7 @@ jobject InstrKindInfoGetter::handleApplyInst() {
 	}
 
 	nodeMap->insert(std::make_pair(castInst, node)); // insert the node into the hash map
-	return node;
+	return nullptr;
 }
 
 jobject InstrKindInfoGetter::handleStringLiteralInst() {
@@ -229,7 +229,7 @@ jobject InstrKindInfoGetter::handleFunctionRefInst() {
 
 	nodeMap->insert(std::make_pair(castInst->getReferencedFunction(), funcExprNode));
 
-	return funcExprNode;
+	return nullptr;
 }
 
 jobject InstrKindInfoGetter::handleStoreInst() {
@@ -354,7 +354,27 @@ jobject InstrKindInfoGetter::handleCondBranchInst() {
 	return ifStmtNode;
 }
 
-
+jobject InstrKindInfoGetter::handleAssignInst(){
+	*outs << "<<Assign Instruction>>" << "\n";
+	AssignInst *castInst = cast<AssignInst>(instr);
+	*outs << "[source]:" << castInst->getSrc().getOpaqueValue() << "\n";
+	*outs << "[Dest]:" << castInst->getDest().getOpaqueValue() << "\n";
+	jobject dest = nullptr;
+	jobject expr = nullptr;
+	if (nodeMap->find(castInst->getDest().getOpaqueValue()) != nodeMap->end()) {
+		dest = nodeMap->at(castInst->getDest().getOpaqueValue());
+	}
+	if(dest == nullptr)
+		*outs << "null dest!\n";
+	if (nodeMap->find(castInst->getSrc().getOpaqueValue()) != nodeMap->end()) {
+		expr = nodeMap->at(castInst->getSrc().getOpaqueValue());
+	}
+	if(expr == nullptr)
+		*outs << "null expr!\n";
+	jobject assign_node = (*wala)->makeNode(CAstWrapper::ASSIGN,dest,expr);
+	nodeMap->insert(std::make_pair(castInst,assign_node));
+	return assign_node;
+}
 ValueKind InstrKindInfoGetter::get() {
 	auto instrKind = instr->getKind();
 	jobject node = nullptr;
@@ -374,7 +394,8 @@ ValueKind InstrKindInfoGetter::get() {
 		}
 	
 		case ValueKind::ApplyInst: {
-			node = handleApplyInst();
+			//node = handleApplyInst();
+			handleApplyInst();
 			break;
 		}
 		
@@ -612,15 +633,24 @@ ValueKind InstrKindInfoGetter::get() {
 			nodeMap->insert(std::make_pair(castInst, read_var));
 			break;
 		}
-		case ValueKind::BeginUnpairedAccessInst:
-		case ValueKind::EndAccessInst:
+		case ValueKind::BeginUnpairedAccessInst:{
+			*outs << "<<Begin Unpaired Access>>" << "\n";
+			break;
+		}
+		case ValueKind::EndAccessInst:{
+			*outs << "<< End Access >>" << "\n";
+			break;
+		}
 		case ValueKind::EndUnpairedAccessInst: {
-			*outs << "<< Access Instruction >>" << "\n";			
+			*outs << "<< End Unpaired Access >>" << "\n";			
 			break;
 		}
 		
 		case ValueKind::StoreBorrowInst:
-		case ValueKind::AssignInst:
+		case ValueKind::AssignInst:{
+			node = handleAssignInst();
+			break;
+		}
 		case ValueKind::StoreUnownedInst:
 		case ValueKind::StoreWeakInst: {
 			*outs << "<< Access Instruction >>" << "\n";
