@@ -108,7 +108,7 @@ jobject InstrKindInfoGetter::handleApplyInst() {
 	}
 
 	nodeMap->insert(std::make_pair(castInst, node)); // insert the node into the hash map
-	return nullptr;
+	return node;
 }
 
 jobject InstrKindInfoGetter::handleStringLiteralInst() {
@@ -363,14 +363,19 @@ jobject InstrKindInfoGetter::handleAssignInst(){
 	jobject expr = nullptr;
 	if (nodeMap->find(castInst->getDest().getOpaqueValue()) != nodeMap->end()) {
 		dest = nodeMap->at(castInst->getDest().getOpaqueValue());
+		auto destIterator = std::find(nodeList->begin(), nodeList->end(), dest);
+		if (destIterator != nodeList->end()) {
+			nodeList->erase(destIterator);
+		}
 	}
-	if(dest == nullptr)
-		*outs << "null dest!\n";
 	if (nodeMap->find(castInst->getSrc().getOpaqueValue()) != nodeMap->end()) {
 		expr = nodeMap->at(castInst->getSrc().getOpaqueValue());
+		auto exprIterator = std::find(nodeList->begin(), nodeList->end(), expr);
+		if (exprIterator != nodeList->end()) {
+			nodeList->erase(exprIterator);
+		}
 	}
-	if(expr == nullptr)
-		*outs << "null expr!\n";
+
 	jobject assign_node = (*wala)->makeNode(CAstWrapper::ASSIGN,dest,expr);
 	nodeMap->insert(std::make_pair(castInst,assign_node));
 	return assign_node;
@@ -394,8 +399,7 @@ ValueKind InstrKindInfoGetter::get() {
 		}
 	
 		case ValueKind::ApplyInst: {
-			//node = handleApplyInst();
-			handleApplyInst();
+			node = handleApplyInst();
 			break;
 		}
 		
