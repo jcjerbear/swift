@@ -49,9 +49,13 @@ jobject InstrKindInfoGetter::handleApplyInst() {
 			if (nodeMap->find(castInst->getArgument(0).getOpaqueValue()) != nodeMap->end()) {
 				firstOperand= nodeMap->at(castInst->getArgument(0).getOpaqueValue());
 			}
+			*outs << "\t [ARG] #1" << ": " << castInst->getArgument(0);
+			*outs << "\t [ADDR] #1" << ": " << castInst->getArgument(0).getOpaqueValue() << "\n";
 			if (nodeMap->find(castInst->getArgument(1).getOpaqueValue()) != nodeMap->end()) {
 				secondOperand= nodeMap->at(castInst->getArgument(1).getOpaqueValue());
 			}
+			*outs << "\t [ARG] #2" << ": " << castInst->getArgument(1);
+			*outs << "\t [ADDR] #2" << ": " << castInst->getArgument(1).getOpaqueValue() << "\n";
 			node = (*wala)->makeNode(CAstWrapper::BINARY_EXPR, CAstWrapper::OP_ADD, firstOperand, secondOperand);
 
 			auto firstOperandIterator = std::find(nodeList->begin(), nodeList->end(), firstOperand);
@@ -368,7 +372,7 @@ ValueKind InstrKindInfoGetter::get() {
 			*outs << "<< IntegerLiteralInst >>" << "\n";
 			IntegerLiteralInst* castInst = cast<IntegerLiteralInst>(instr);
 			APInt value = castInst->getValue();
-			node = (*wala)->makeConstant(value.getSExtValue());
+			node = (*wala)->makeConstant((int)value.getSExtValue());
 			nodeMap->insert(std::make_pair(castInst, node));
 			break;
 		}
@@ -453,6 +457,13 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::LoadInst: {
 			*outs << "<< LoadInst >>" << "\n";
+			LoadInst *castInst = cast<LoadInst>(instr);
+			*outs << "\t\t [name]:" << (castInst->getOperand()).getOpaqueValue() << "\n";
+			jobject node = nullptr;
+			if (nodeMap->find(castInst->getOperand().getOpaqueValue()) != nodeMap->end()) {
+				node = nodeMap->at(castInst->getOperand().getOpaqueValue());
+			}
+			nodeMap->insert(std::make_pair(castInst, node));
 			break;
 		}
 		
@@ -566,11 +577,30 @@ ValueKind InstrKindInfoGetter::get() {
 			break;
 		}
 		
-		case ValueKind::BeginAccessInst:
+		case ValueKind::BeginAccessInst:{
+			*outs << "<< Begin Access >>" << "\n";
+			BeginAccessInst *castInst = cast<BeginAccessInst>(instr);
+			*outs << "\t\t [oper_addr]:" << (castInst->getOperand()).getOpaqueValue() << "\n";
+			GlobalAddrInst *Global_var = (GlobalAddrInst *)(castInst->getOperand()).getOpaqueValue();
+			SILGlobalVariable* variable = Global_var->getReferencedGlobal();
+			StringRef var_name = variable->getName();
+			*outs << "\t\t[Var name]:" << var_name << "\n";
+			//*outs << ((string)var_name).c_str() << "\n";
+			//*outs << "\t\t[Addr]:" << init_inst << "\n";
+			jobject symbol = (*wala)->makeConstant(var_name.data());		
+			//jobject node = nullptr;
+			//
+			//if (nodeMap->find((castInst->getOperand()).getOpaqueValue()) != nodeMap->end()) {
+			//	node = nodeMap->at((castInst->getOperand()).getOpaqueValue());
+			//}
+			jobject read_var = (*wala)->makeNode(CAstWrapper::VAR,symbol);
+			nodeMap->insert(std::make_pair(castInst, read_var));
+			break;
+		}
 		case ValueKind::BeginUnpairedAccessInst:
 		case ValueKind::EndAccessInst:
 		case ValueKind::EndUnpairedAccessInst: {
-			*outs << "<< Access Instruction >>" << "\n";
+			*outs << "<< Access Instruction >>" << "\n";			
 			break;
 		}
 		
@@ -705,6 +735,8 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::StructInst: {		
 			*outs << "<< StructInst >>" << "\n";
+			StructInst *castInst = cast<StructInst>(instr);
+
 			break;
 		}
 		
@@ -751,11 +783,25 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::AllocGlobalInst: {		
 			*outs << "<< AllocGlobalInst >>" << "\n";
+			AllocGlobalInst *castInst = cast<AllocGlobalInst>(instr);
+			SILGlobalVariable* variable = castInst->getReferencedGlobal();
+			StringRef var_name = variable->getName();
+			SILType var_type = variable->getLoweredType();
+			*outs << "\t\t[Var name]:" << var_name << "\n";
+			*outs << "\t\t[Var type]:" << var_type << "\n";
 			break;
 		}
 		
 		case ValueKind::GlobalAddrInst: {		
 			*outs << "<< GlobalAddrInst >>" << "\n";
+			GlobalAddrInst *castInst = cast<GlobalAddrInst>(instr);
+			SILGlobalVariable* variable = castInst->getReferencedGlobal();
+			StringRef var_name = variable->getName();
+			*outs << "\t\t[Var name]:" << var_name << "\n";
+			//*outs << ((string)var_name).c_str() << "\n";
+			//*outs << "\t\t[Addr]:" << init_inst << "\n";
+			jobject symbol = (*wala)->makeConstant(var_name.data());
+			nodeMap->insert(std::make_pair(castInst, symbol));
 			break;
 		}
 		
