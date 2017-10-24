@@ -14,6 +14,7 @@ endif()
 add_swift_library(swiftWALASupport STATIC
   WALAWalker.cpp
   InstrKindInfoGetter.cpp
+  BasicBlockLabeller.cpp
   LINK_LIBRARIES
     swiftParse
     swiftSema

@@ -10,11 +10,15 @@ using namespace swift;
 using std::string;
 using std::list;
 
-InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList, raw_ostream* outs) {
+InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, 
+										unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList, 
+										BasicBlockLabeller* labeller,
+										raw_ostream* outs) {
 	this->instr = instr;
 	this->wala = wala;
 	this->nodeMap = nodeMap;
 	this->nodeList = nodeList; // top level CAst nodes only
+	this->labeller = labeller;
 	this->outs = outs;
 }
 
@@ -268,7 +272,7 @@ jobject InstrKindInfoGetter::handleBranchInst() {
 		}
 	}
 	if (destBasicBlock != NULL) {
-		jobject labelNode = (*wala)->makeConstant(std::to_string(destBasicBlock->getDebugID()).c_str());
+		jobject labelNode = (*wala)->makeConstant(labeller->label(destBasicBlock).c_str());
 		gotoNode = (*wala)->makeNode(CAstWrapper::GOTO, labelNode);
 	}
 
@@ -312,7 +316,7 @@ jobject InstrKindInfoGetter::handleCondBranchInst() {
 		}
 	}
 	if (trueBasicBlock != NULL) {
-		jobject labelNode = (*wala)->makeConstant(std::to_string(trueBasicBlock->getDebugID()).c_str());
+		jobject labelNode = (*wala)->makeConstant(labeller->label(trueBasicBlock).c_str());
 		trueGotoNode = (*wala)->makeNode(CAstWrapper::GOTO, labelNode);
 	}
 
@@ -329,7 +333,7 @@ jobject InstrKindInfoGetter::handleCondBranchInst() {
 		}
 	}
 	if (falseBasicBlock != NULL) {
-		jobject labelNode = (*wala)->makeConstant(std::to_string(falseBasicBlock->getDebugID()).c_str());
+		jobject labelNode = (*wala)->makeConstant(labeller->label(falseBasicBlock).c_str());
 		falseGotoNode = (*wala)->makeNode(CAstWrapper::GOTO, labelNode);
 	}
 
