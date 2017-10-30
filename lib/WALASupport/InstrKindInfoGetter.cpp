@@ -4,7 +4,6 @@
 #include "CAstWrapper.h"
 #include <string>
 #include <list>
-#include <cassert>
 #include <algorithm>
 
 using namespace swift;
@@ -21,12 +20,6 @@ InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration*
 	this->nodeList = nodeList; // top level CAst nodes only
 	this->labeller = labeller;
 	this->outs = outs;
-	(*outs) << "HELOOOoooooooooooooooooooooooooooooooooooo$$$$$$$$\n";
-	std::cout<< "YOU SUCK"<<std::endl;
-	std::cout<< "Did this."<<std::endl;
-
-	*outs<<"12345\n";
-
 }
 
 bool InstrKindInfoGetter::isBuiltInFunction(SILFunction* function) {
@@ -170,20 +163,6 @@ jobject InstrKindInfoGetter::handleStringLiteralInst() {
 
 	return walaConstant;
 }
-
-/*
-Handling the integer literal object
-*/
-jobject InstrKindInfoGetter::handleIntegerLiteralInst(){
-	assert(outs != NULL);
-	*outs << "<< IntegerLiteralInst >>\n";
-	IntegerLiteralInst *castedInst = cast<IntegerLiteralInst>(instr);
-	APInt val = castedInst->getValue();
-	jobject walaConstant = (*wala)->makeConstant( );
-	return walaConstant;
-}
-
-
 
 jobject InstrKindInfoGetter::handleConstStringLiteralInst() {
 	// ValueKind indentifier
@@ -375,7 +354,6 @@ jobject InstrKindInfoGetter::handleCondBranchInst() {
 	return ifStmtNode;
 }
 
-
 jobject InstrKindInfoGetter::handleAssignInst(){
 	*outs << "<<Assign Instruction>>" << "\n";
 	AssignInst *castInst = cast<AssignInst>(instr);
@@ -402,7 +380,6 @@ jobject InstrKindInfoGetter::handleAssignInst(){
 	nodeMap->insert(std::make_pair(castInst,assign_node));
 	return assign_node;
 }
-
 ValueKind InstrKindInfoGetter::get() {
 	auto instrKind = instr->getKind();
 	jobject node = nullptr;
@@ -432,9 +409,7 @@ ValueKind InstrKindInfoGetter::get() {
 		}
 		
 		case ValueKind::IntegerLiteralInst: {
-
 			*outs << "<< IntegerLiteralInst >>" << "\n";
-
 			IntegerLiteralInst* castInst = cast<IntegerLiteralInst>(instr);
 			APInt value = castInst->getValue();
 			node = (*wala)->makeConstant((int)value.getSExtValue());
