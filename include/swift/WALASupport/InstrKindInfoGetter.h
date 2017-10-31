@@ -26,6 +26,10 @@ private:
 
 	// member functions
 	bool isBuiltInFunction(SILFunction* function);
+	bool isUnaryOperator(SILFunction* function);
+	bool isBinaryOperator(SILFunction* function);
+	Identifier getBuiltInOperatorName(SILFunction* function);
+	jobject getOperatorCAstType(Identifier name);
 
 	jobject handleApplyInst();
 	jobject handleStringLiteralInst();
