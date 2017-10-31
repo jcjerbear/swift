@@ -5,6 +5,7 @@
 #include <string>
 #include <list>
 #include <algorithm>
+#include <stdio.h>
 
 using namespace swift;
 using std::string;
@@ -381,7 +382,7 @@ jobject InstrKindInfoGetter::handleAssignInst(){
 	return assign_node;
 }
 ValueKind InstrKindInfoGetter::get() {
-	auto instrKind = instr->getKind();
+	ValueKind instrKind = instr->getKind();
 	jobject node = nullptr;
 
 	switch (instrKind) {
@@ -482,6 +483,11 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::DebugValueInst: {
 			*outs << "<< DebugValueInst >>" << "\n";
+			DebugValueInst *castInst = cast<DebugValueInst>(instr);
+			VarDecl *node = castInst->getDecl();
+			*outs << "\t\t[addr of end VarDecl]:" << node->getSourceRange().End.getOpaquePointerValue() << "\n";
+			StringRef param_name = node->getNameStr();
+			*outs << "\t\t[name of param]:" << param_name << "\n";
 			break;
 		}
 		
@@ -509,11 +515,24 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::LoadBorrowInst: {
 			*outs << "<< LoadBorrowInst >>" << "\n";
+			LoadInst *castInst = cast<LoadInst>(instr);
+			*outs << "\t\t [name]:" << castInst->getOperand() << "\n";
+			*outs << "\t\t [addr]:" << castInst->getOperand().getOpaqueValue() << "\n";
 			break;
 		}
 		
 		case ValueKind::BeginBorrowInst: {
 			*outs << "<< BeginBorrowInst >>" << "\n";
+			BeginBorrowInst *castInst = cast<BeginBorrowInst>(instr);
+			*outs << "\t\t [name]:" << castInst->getOperand() << "\n";
+			*outs << "\t\t [addr]:" << castInst->getOperand().getOpaqueValue() << "\n";
+			SILBasicBlock *parentBB = castInst->getParent();
+			for(int i = 0; i < parentBB->getNumArguments();i++){
+				SILArgument *argu = parentBB->getArgument(i);
+				*outs << "\t\t[addr of arg]:" << argu << "\n";
+			}
+			//*outs << "\t\t [owner]:" << &(castInst->getOperandRef()) << "\n";
+			//*outs << *instr << "\n";
 			break;
 		}
 		
@@ -650,7 +669,10 @@ ValueKind InstrKindInfoGetter::get() {
 			break;
 		}
 		
-		case ValueKind::StoreBorrowInst:
+		case ValueKind::StoreBorrowInst:{
+			*outs << "<< Store Borrow Instruction >>" << "\n";
+			break;			
+		}
 		case ValueKind::AssignInst:{
 			node = handleAssignInst();
 			break;
@@ -774,6 +796,19 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::CopyAddrInst: {		
 			*outs << "<< CopyAddrInst >>" << "\n";
+			break;
+		}
+
+		case ValueKind::CopyValueInst:{
+			*outs << "<< CopyValueInst >>" << "\n";
+			CopyValueInst *castInst = cast<CopyValueInst>(instr);
+			*outs << "\t\t [name]:" << castInst->getOperand() << "\n";
+			*outs << "\t\t [addr]:" << castInst->getOperand().getOpaqueValue() << "\n";
+			break;
+		}
+
+		case ValueKind::DestroyValueInst:{
+			*outs << "<< DestroyValueInst >>" << "\n";
 			break;
 		}
 		
@@ -935,7 +970,8 @@ ValueKind InstrKindInfoGetter::get() {
 		}		
 		
 		default: {
-// 			outfile 	<< "\t\t xxxxx Not a handled inst type \n";
+ 			*outs << "\t\t xxxxx Not a handled inst type \n";
+ 			
 			break;
 		}
 	}
@@ -944,5 +980,6 @@ ValueKind InstrKindInfoGetter::get() {
 		nodeList->push_back(node);
 		//wala->print(node);
 	}
+	*outs << *instr << "\n";
 	return instrKind;
 }
