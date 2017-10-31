@@ -1,6 +1,7 @@
 #include "swift/WALASupport/InstrKindInfoGetter.h"
 #include "swift/Demangling/Demangle.h"
 #include "swift/AST/ASTNode.h"
+#include "swift/AST/Identifier.h"
 #include "CAstWrapper.h"
 #include <string>
 #include <list>
@@ -23,7 +24,72 @@ InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration*
 }
 
 bool InstrKindInfoGetter::isBuiltInFunction(SILFunction* function) {
-	return Demangle::demangleSymbolAsString(function->getName()) == "static Swift.String.+ infix(Swift.String, Swift.String) -> Swift.String";
+	return isUnaryOperator(function) || isBinaryOperator(function);
+}
+
+bool InstrKindInfoGetter::isUnaryOperator(SILFunction* function) {
+	SILLocation location = function->getLocation();
+	Decl* ASTnode = location.getAsASTNode<Decl>();
+	FuncDecl* funcDecl = static_cast<FuncDecl*>(ASTnode);
+	return funcDecl->isUnaryOperator();
+}
+
+bool InstrKindInfoGetter::isBinaryOperator(SILFunction* function) {
+	SILLocation location = function->getLocation();
+	Decl* ASTnode = location.getAsASTNode<Decl>();
+	FuncDecl* funcDecl = static_cast<FuncDecl*>(ASTnode);
+	return funcDecl->isBinaryOperator();
+}
+
+Identifier InstrKindInfoGetter::getBuiltInOperatorName(SILFunction* function) {
+	SILLocation location = function->getLocation();
+	Decl* ASTnode = location.getAsASTNode<Decl>();
+	FuncDecl* funcDecl = static_cast<FuncDecl*>(ASTnode);
+	return funcDecl->getName();
+}
+
+jobject InstrKindInfoGetter::getOperatorCAstType(Identifier name) {
+	if (name.is("==")) {
+		return CAstWrapper::OP_EQ;
+	} else if (name.is("!=")) {
+		return CAstWrapper::OP_NE;
+	} else if (name.is("+")) {
+		return CAstWrapper::OP_ADD;
+	} else if (name.is("/")) {
+		return CAstWrapper::OP_DIV;
+	} else if (name.is("<<")) {
+		return CAstWrapper::OP_LSH;
+	} else if (name.is("*")) {
+		return CAstWrapper::OP_MUL;
+	} else if (name.is(">>")) {
+		return CAstWrapper::OP_RSH;
+	} else if (name.is("-")) {
+		return CAstWrapper::OP_SUB;
+	} else if (name.is(">=")) {
+		return CAstWrapper::OP_GE;
+	} else if (name.is(">")) {
+		return CAstWrapper::OP_GT;
+	} else if (name.is("<=")) {
+		return CAstWrapper::OP_LE;
+	} else if (name.is("<")) {
+		return CAstWrapper::OP_LT;
+	} else if (name.is("!")) {
+		return CAstWrapper::OP_NOT;
+	} else if (name.is("~")) {
+		return CAstWrapper::OP_BITNOT;
+	} else if (name.is("&")) {
+		return CAstWrapper::OP_BIT_AND;
+	} else if (name.is("&&")) {
+		return CAstWrapper::OP_REL_AND;
+	} else if (name.is("|")) {
+		return CAstWrapper::OP_BIT_OR;
+	} else if (name.is("||")) {
+		return CAstWrapper::OP_REL_OR;
+	} else if (name.is("^")) {
+		return CAstWrapper::OP_BIT_XOR;
+	} else {
+		return nullptr;
+	}
 }
 
 jobject InstrKindInfoGetter::handleApplyInst() {
@@ -36,76 +102,90 @@ jobject InstrKindInfoGetter::handleApplyInst() {
 
 	// Cast the instr 
 	ApplyInst *castInst = cast<ApplyInst>(instr);
-	SILFunction* function = castInst->getReferencedFunction();
-	SILLocation location = function->getLocation();
-	Decl* ASTnode = location.getAsASTNode<Decl>();
-	*outs << "ASTnode: " << ASTnode << "\n";
-	*outs << "isUnaryOperator(): " << ((FuncDecl*)ASTnode)->isUnaryOperator() << "\n";
-	*outs << "isBinaryOperator(): " << ((FuncDecl*)ASTnode)->isBinaryOperator() << "\n";
 
 	if (isBuiltInFunction(castInst->getReferencedFunction())) {
-		if (outs != NULL) {
-			*outs << "\tThis is an built-in operator\n";
-		}
-		if (Demangle::demangleSymbolAsString(castInst->getReferencedFunction()->getName()) == "static Swift.String.+ infix(Swift.String, Swift.String) -> Swift.String") {
-			jobject firstOperand = nullptr;
-			jobject secondOperand = nullptr;
-			if (nodeMap->find(castInst->getArgument(0).getOpaqueValue()) != nodeMap->end()) {
-				firstOperand= nodeMap->at(castInst->getArgument(0).getOpaqueValue());
-			}
-			*outs << "\t [ARG] #1" << ": " << castInst->getArgument(0);
-			*outs << "\t [ADDR] #1" << ": " << castInst->getArgument(0).getOpaqueValue() << "\n";
-			if (nodeMap->find(castInst->getArgument(1).getOpaqueValue()) != nodeMap->end()) {
-				secondOperand= nodeMap->at(castInst->getArgument(1).getOpaqueValue());
-			}
-			*outs << "\t [ARG] #2" << ": " << castInst->getArgument(1);
-			*outs << "\t [ADDR] #2" << ": " << castInst->getArgument(1).getOpaqueValue() << "\n";
-			node = (*wala)->makeNode(CAstWrapper::BINARY_EXPR, CAstWrapper::OP_ADD, firstOperand, secondOperand);
-
-			auto firstOperandIterator = std::find(nodeList->begin(), nodeList->end(), firstOperand);
-			if (firstOperandIterator != nodeList->end()) {
-				nodeList->erase(firstOperandIterator);
-			}
-
-			auto secondOperandIterator = std::find(nodeList->begin(), nodeList->end(), secondOperand);
-			if (secondOperandIterator != nodeList->end()) {
-				nodeList->erase(secondOperandIterator);
-			}
-		}
-	} else {
-		if (outs != NULL) {
-			*outs << "\t [CALLEE]: " << Demangle::demangleSymbolAsString(castInst->getReferencedFunction()->getName()) << "\n";
-		}
-
-		if (nodeMap->find(castInst->getReferencedFunction()) == nodeMap->end()) {
-			if (outs != NULL) {
-				*outs << "something terribly wrong happens: failed to find the CAst node for the callee\n";
-			}
-		}
-		jobject funcExprNode = nodeMap->at(castInst->getReferencedFunction());
-
-		list<jobject> params;
-		for (unsigned i = 0; i < castInst->getNumArguments(); ++i) {
-			SILValue v = castInst->getArgument(i);
-			if (nodeMap->find(v.getOpaqueValue()) != nodeMap->end()) {
-				jobject child = nodeMap->at(v.getOpaqueValue());
-				params.push_back(child);
-
-				auto paramIterator = std::find(nodeList->begin(), nodeList->end(), child);
-				if (paramIterator != nodeList->end()) {
-					nodeList->erase(paramIterator);
+		Identifier name = getBuiltInOperatorName(castInst->getReferencedFunction());
+		jobject operatorNode = getOperatorCAstType(name);
+		if (operatorNode != nullptr) {
+			if (isUnaryOperator(castInst->getReferencedFunction())) {
+				jobject operand = nullptr;
+				SILValue argument = castInst->getArgument(castInst->getNumArguments() - 2); // the second last one (last one is metatype)
+				if (argument->getKind() == ValueKind::GlobalAddrInst) {
+					argument = castInst->getArgument(1);
+				}
+				if (nodeMap->find(argument.getOpaqueValue()) != nodeMap->end()) {
+					operand = nodeMap->at(argument.getOpaqueValue());
+				}
+				node = (*wala)->makeNode(CAstWrapper::UNARY_EXPR, operatorNode, operand);
+				auto operandIterator = std::find(nodeList->begin(), nodeList->end(), operand);
+				if (operandIterator != nodeList->end()) {
+					nodeList->erase(operandIterator);
 				}
 			} else {
-				// This should not happen in the end after we finish this class. We should have a CAst node in the map for each and every argument
-			}
+				// binary operator
+				jobject firstOperand = nullptr;
+				jobject secondOperand = nullptr;
+				SILValue argument0 = castInst->getArgument(castInst->getNumArguments() - 3);
+				SILValue argument1 = castInst->getArgument(castInst->getNumArguments() - 2); // the second last one (last one is metatype)
 
-			if (outs != NULL) {
-				*outs << "\t [ARG] #" << i << ": " << v;
-				*outs << "\t [ADDR] #" << i << ": " << v.getOpaqueValue() << "\n";
+				if (nodeMap->find(argument0.getOpaqueValue()) != nodeMap->end()) {
+					firstOperand= nodeMap->at(argument0.getOpaqueValue());
+				}
+				if (nodeMap->find(argument1.getOpaqueValue()) != nodeMap->end()) {
+					secondOperand= nodeMap->at(argument1.getOpaqueValue());
+				}
+				node = (*wala)->makeNode(CAstWrapper::BINARY_EXPR, operatorNode, firstOperand, secondOperand);
+				auto firstOperandIterator = std::find(nodeList->begin(), nodeList->end(), firstOperand);
+				if (firstOperandIterator != nodeList->end()) {
+					nodeList->erase(firstOperandIterator);
+				}
+				auto secondOperandIterator = std::find(nodeList->begin(), nodeList->end(), secondOperand);
+				if (secondOperandIterator != nodeList->end()) {
+					nodeList->erase(secondOperandIterator);
+				}
 			}
+			nodeMap->insert(std::make_pair(castInst, node)); // insert the node into the hash map
+			return node;
+		} else {
+			// fall through
+			// handled as a regular function call
 		}
-		node = (*wala)->makeNode(CAstWrapper::CALL, funcExprNode, (*wala)->makeArray(&params));
+
+
+	} 
+	if (outs != NULL) {
+		*outs << "\t [CALLEE]: " << Demangle::demangleSymbolAsString(castInst->getReferencedFunction()->getName()) << "\n";
 	}
+
+	if (nodeMap->find(castInst->getReferencedFunction()) == nodeMap->end()) {
+		if (outs != NULL) {
+			*outs << "something terribly wrong happens: failed to find the CAst node for the callee\n";
+		}
+	}
+	jobject funcExprNode = nodeMap->at(castInst->getReferencedFunction());
+
+	list<jobject> params;
+	for (unsigned i = 0; i < castInst->getNumArguments(); ++i) {
+		SILValue v = castInst->getArgument(i);
+		if (nodeMap->find(v.getOpaqueValue()) != nodeMap->end()) {
+			jobject child = nodeMap->at(v.getOpaqueValue());
+			params.push_back(child);
+
+			auto paramIterator = std::find(nodeList->begin(), nodeList->end(), child);
+			if (paramIterator != nodeList->end()) {
+				nodeList->erase(paramIterator);
+			}
+		} else {
+			// This should not happen in the end after we finish this class. We should have a CAst node in the map for each and every argument
+		}
+
+		if (outs != NULL) {
+			*outs << "\t [ARG] #" << i << ": " << v;
+			*outs << "\t [ADDR] #" << i << ": " << v.getOpaqueValue() << "\n";
+		}
+	}
+	node = (*wala)->makeNode(CAstWrapper::CALL, funcExprNode, (*wala)->makeArray(&params));
+	
 
 	nodeMap->insert(std::make_pair(castInst, node)); // insert the node into the hash map
 	return node;
@@ -247,7 +327,9 @@ jobject InstrKindInfoGetter::handleStoreInst() {
 		*outs << "\t [DEST]: " << dest.getOpaqueValue() << "\n";
 	}
 
-	//nodeMap->insert(std::make_pair(castInst->getReferencedFunction(), funcExprNode));
+	if (nodeMap->find(src.getOpaqueValue()) != nodeMap->end()) {
+		nodeMap->insert(std::make_pair(dest.getOpaqueValue(), nodeMap->at(src.getOpaqueValue())));
+	}
 
 	return nullptr;
 }
@@ -663,6 +745,11 @@ ValueKind InstrKindInfoGetter::get() {
 
 		case ValueKind::AllocStackInst: {
 			*outs << "<< AllocStack Instruction >>" << "\n";
+			AllocStackInst *castInst = cast<AllocStackInst>(instr);
+			for (auto& operand : castInst->getAllOperands()) {
+				*outs << "\t [OPERAND]: " << operand.get() << "\n";
+				*outs << "\t [ADDR]: " << operand.get().getOpaqueValue() << "\n";
+			}
 			break;
 		}
 		case ValueKind::MetatypeInst: {		
