@@ -128,7 +128,6 @@ jobject InstrKindInfoGetter::handleApplyInst() {
 				jobject secondOperand = nullptr;
 				SILValue argument0 = castInst->getArgument(castInst->getNumArguments() - 3);
 				SILValue argument1 = castInst->getArgument(castInst->getNumArguments() - 2); // the second last one (last one is metatype)
-
 				if (nodeMap->find(argument0.getOpaqueValue()) != nodeMap->end()) {
 					firstOperand= nodeMap->at(argument0.getOpaqueValue());
 				}
@@ -148,8 +147,6 @@ jobject InstrKindInfoGetter::handleApplyInst() {
 			nodeMap->insert(std::make_pair(castInst, node)); // insert the node into the hash map
 			return node;
 		} else {
-			// fall through
-			// handled as a regular function call
 		}
 
 
@@ -566,10 +563,19 @@ ValueKind InstrKindInfoGetter::get() {
 		case ValueKind::DebugValueInst: {
 			*outs << "<< DebugValueInst >>" << "\n";
 			DebugValueInst *castInst = cast<DebugValueInst>(instr);
-			VarDecl *node = castInst->getDecl();
-			*outs << "\t\t[addr of end VarDecl]:" << node->getSourceRange().End.getOpaquePointerValue() << "\n";
-			StringRef param_name = node->getNameStr();
-			*outs << "\t\t[name of param]:" << param_name << "\n";
+			SILDebugVariable info = castInst->getVarInfo();
+			unsigned argno = info.ArgNo;
+			*outs << argno << "\n";
+			VarDecl *decl = castInst->getDecl();
+			StringRef param_name = decl->getNameStr();
+			SILBasicBlock *parentBB = castInst->getParent();
+			
+			SILArgument *argu = parentBB->getArgument(argno - 1);
+			*outs << "\t\t[addr of arg]:" << argu << "\n";
+
+			jobject symbol = (*wala)->makeConstant(param_name.data());		
+			node = (*wala)->makeNode(CAstWrapper::VAR,symbol);
+			nodeMap->insert(std::make_pair(argu, node));
 			break;
 		}
 		
@@ -606,15 +612,15 @@ ValueKind InstrKindInfoGetter::get() {
 		case ValueKind::BeginBorrowInst: {
 			*outs << "<< BeginBorrowInst >>" << "\n";
 			BeginBorrowInst *castInst = cast<BeginBorrowInst>(instr);
-			*outs << "\t\t [name]:" << castInst->getOperand() << "\n";
-			*outs << "\t\t [addr]:" << castInst->getOperand().getOpaqueValue() << "\n";
-			SILBasicBlock *parentBB = castInst->getParent();
-			for(int i = 0; i < parentBB->getNumArguments();i++){
-				SILArgument *argu = parentBB->getArgument(i);
-				*outs << "\t\t[addr of arg]:" << argu << "\n";
+			//*outs << "\t\t [addr]:" << castInst->getOperand().getOpaqueValue() << "\n";
+			if (nodeMap->find(castInst->getOperand().getOpaqueValue()) != nodeMap->end()) {
+				node = nodeMap->at(castInst->getOperand().getOpaqueValue());
+				auto destIterator = std::find(nodeList->begin(), nodeList->end(), node);
+				if (destIterator != nodeList->end()) {
+					nodeList->erase(destIterator);
+				}
 			}
-			//*outs << "\t\t [owner]:" << &(castInst->getOperandRef()) << "\n";
-			//*outs << *instr << "\n";
+			nodeMap->insert(std::make_pair(castInst,node));
 			break;
 		}
 		
@@ -890,7 +896,14 @@ ValueKind InstrKindInfoGetter::get() {
 			*outs << "<< CopyValueInst >>" << "\n";
 			CopyValueInst *castInst = cast<CopyValueInst>(instr);
 			*outs << "\t\t [name]:" << castInst->getOperand() << "\n";
-			*outs << "\t\t [addr]:" << castInst->getOperand().getOpaqueValue() << "\n";
+			if (nodeMap->find(castInst->getOperand().getOpaqueValue()) != nodeMap->end()) {
+				node = nodeMap->at(castInst->getOperand().getOpaqueValue());
+				auto destIterator = std::find(nodeList->begin(), nodeList->end(), node);
+				if (destIterator != nodeList->end()) {
+					nodeList->erase(destIterator);
+				}
+			}
+			nodeMap->insert(std::make_pair(castInst,node));
 			break;
 		}
 
