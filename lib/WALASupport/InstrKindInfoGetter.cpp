@@ -6,6 +6,7 @@
 #include <string>
 #include <list>
 #include <algorithm>
+#include <stdio.h>
 
 using namespace swift;
 using std::string;
@@ -127,7 +128,6 @@ jobject InstrKindInfoGetter::handleApplyInst() {
 				jobject secondOperand = nullptr;
 				SILValue argument0 = castInst->getArgument(castInst->getNumArguments() - 3);
 				SILValue argument1 = castInst->getArgument(castInst->getNumArguments() - 2); // the second last one (last one is metatype)
-
 				if (nodeMap->find(argument0.getOpaqueValue()) != nodeMap->end()) {
 					firstOperand= nodeMap->at(argument0.getOpaqueValue());
 				}
@@ -147,8 +147,6 @@ jobject InstrKindInfoGetter::handleApplyInst() {
 			nodeMap->insert(std::make_pair(castInst, node)); // insert the node into the hash map
 			return node;
 		} else {
-			// fall through
-			// handled as a regular function call
 		}
 
 
@@ -463,7 +461,7 @@ jobject InstrKindInfoGetter::handleAssignInst(){
 	return assign_node;
 }
 ValueKind InstrKindInfoGetter::get() {
-	auto instrKind = instr->getKind();
+	ValueKind instrKind = instr->getKind();
 	jobject node = nullptr;
 
 	switch (instrKind) {
@@ -564,6 +562,20 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::DebugValueInst: {
 			*outs << "<< DebugValueInst >>" << "\n";
+			DebugValueInst *castInst = cast<DebugValueInst>(instr);
+			SILDebugVariable info = castInst->getVarInfo();
+			unsigned argno = info.ArgNo;
+			*outs << argno << "\n";
+			VarDecl *decl = castInst->getDecl();
+			StringRef param_name = decl->getNameStr();
+			SILBasicBlock *parentBB = castInst->getParent();
+			
+			SILArgument *argu = parentBB->getArgument(argno - 1);
+			*outs << "\t\t[addr of arg]:" << argu << "\n";
+
+			jobject symbol = (*wala)->makeConstant(param_name.data());		
+			node = (*wala)->makeNode(CAstWrapper::VAR,symbol);
+			nodeMap->insert(std::make_pair(argu, node));
 			break;
 		}
 		
@@ -591,11 +603,24 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::LoadBorrowInst: {
 			*outs << "<< LoadBorrowInst >>" << "\n";
+			LoadInst *castInst = cast<LoadInst>(instr);
+			*outs << "\t\t [name]:" << castInst->getOperand() << "\n";
+			*outs << "\t\t [addr]:" << castInst->getOperand().getOpaqueValue() << "\n";
 			break;
 		}
 		
 		case ValueKind::BeginBorrowInst: {
 			*outs << "<< BeginBorrowInst >>" << "\n";
+			BeginBorrowInst *castInst = cast<BeginBorrowInst>(instr);
+			//*outs << "\t\t [addr]:" << castInst->getOperand().getOpaqueValue() << "\n";
+			if (nodeMap->find(castInst->getOperand().getOpaqueValue()) != nodeMap->end()) {
+				node = nodeMap->at(castInst->getOperand().getOpaqueValue());
+				auto destIterator = std::find(nodeList->begin(), nodeList->end(), node);
+				if (destIterator != nodeList->end()) {
+					nodeList->erase(destIterator);
+				}
+			}
+			nodeMap->insert(std::make_pair(castInst,node));
 			break;
 		}
 		
@@ -732,7 +757,10 @@ ValueKind InstrKindInfoGetter::get() {
 			break;
 		}
 		
-		case ValueKind::StoreBorrowInst:
+		case ValueKind::StoreBorrowInst:{
+			*outs << "<< Store Borrow Instruction >>" << "\n";
+			break;			
+		}
 		case ValueKind::AssignInst:{
 			node = handleAssignInst();
 			break;
@@ -861,6 +889,26 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::CopyAddrInst: {		
 			*outs << "<< CopyAddrInst >>" << "\n";
+			break;
+		}
+
+		case ValueKind::CopyValueInst:{
+			*outs << "<< CopyValueInst >>" << "\n";
+			CopyValueInst *castInst = cast<CopyValueInst>(instr);
+			*outs << "\t\t [name]:" << castInst->getOperand() << "\n";
+			if (nodeMap->find(castInst->getOperand().getOpaqueValue()) != nodeMap->end()) {
+				node = nodeMap->at(castInst->getOperand().getOpaqueValue());
+				auto destIterator = std::find(nodeList->begin(), nodeList->end(), node);
+				if (destIterator != nodeList->end()) {
+					nodeList->erase(destIterator);
+				}
+			}
+			nodeMap->insert(std::make_pair(castInst,node));
+			break;
+		}
+
+		case ValueKind::DestroyValueInst:{
+			*outs << "<< DestroyValueInst >>" << "\n";
 			break;
 		}
 		
@@ -1022,7 +1070,8 @@ ValueKind InstrKindInfoGetter::get() {
 		}		
 		
 		default: {
-// 			outfile 	<< "\t\t xxxxx Not a handled inst type \n";
+ 			*outs << "\t\t xxxxx Not a handled inst type \n";
+ 			
 			break;
 		}
 	}
@@ -1031,5 +1080,6 @@ ValueKind InstrKindInfoGetter::get() {
 		nodeList->push_back(node);
 		//wala->print(node);
 	}
+	*outs << *instr << "\n";
 	return instrKind;
 }
