@@ -80,11 +80,13 @@ jobject InstrKindInfoGetter::getOperatorCAstType(Identifier name) {
 	} else if (name.is("&")) {
 		return CAstWrapper::OP_BIT_AND;
 	} else if (name.is("&&")) {
-		return CAstWrapper::OP_REL_AND;
+		// return CAstWrapper::OP_REL_AND;
+		return nullptr;
 	} else if (name.is("|")) {
 		return CAstWrapper::OP_BIT_OR;
 	} else if (name.is("||")) {
-		return CAstWrapper::OP_REL_OR;
+		// return CAstWrapper::OP_REL_OR;
+		return nullptr;
 	} else if (name.is("^")) {
 		return CAstWrapper::OP_BIT_XOR;
 	} else {
@@ -107,6 +109,16 @@ jobject InstrKindInfoGetter::handleApplyInst() {
 		Identifier name = getBuiltInOperatorName(castInst->getReferencedFunction());
 		jobject operatorNode = getOperatorCAstType(name);
 		if (operatorNode != nullptr) {
+
+		if (outs != NULL) {
+			*outs << "\t Built in operator\n";
+			for (unsigned i = 0; i < castInst->getNumArguments(); ++i) {
+				SILValue v = castInst->getArgument(i);
+				*outs << "\t [ARG] #" << i << ": " << v;
+				*outs << "\t [ADDR] #" << i << ": " << v.getOpaqueValue() << "\n";
+			}
+		}
+
 			if (isUnaryOperator(castInst->getReferencedFunction())) {
 				jobject operand = nullptr;
 				SILValue argument = castInst->getArgument(castInst->getNumArguments() - 2); // the second last one (last one is metatype)
