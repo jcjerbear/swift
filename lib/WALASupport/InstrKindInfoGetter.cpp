@@ -14,14 +14,38 @@ using std::list;
 
 InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, 
 										unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList, 
-										BasicBlockLabeller* labeller,
+										unordered_map<void*, string>* symbolTable, BasicBlockLabeller* labeller,
 										raw_ostream* outs) {
 	this->instr = instr;
 	this->wala = wala;
 	this->nodeMap = nodeMap;
 	this->nodeList = nodeList; // top level CAst nodes only
+	this->symbolTable = symbolTable;
 	this->labeller = labeller;
 	this->outs = outs;
+}
+
+// This function finds a CAst node in using the key. The node will be removed from the nodeList
+// If the key corresponds to a variable, a new VAR CAst node will be created and returned
+// nullptr will be returned if such node does not exist
+jobject InstrKindInfoGetter::findAndRemoveCAstNode(void* key) {
+	jobject node = nullptr;
+
+	if (symbolTable->find(key) != symbolTable->end()) {
+		// this is a variable
+		jobject name = (*wala)->makeConstant(symbolTable->at(key).c_str());
+		node = (*wala)->makeNode(CAstWrapper::VAR, name);
+	} else if (nodeMap->find(key) != nodeMap->end()) {
+		// find
+		node = nodeMap->at(key);
+		// remove
+		auto it = std::find(nodeList->begin(), nodeList->end(), node);
+		if (it != nodeList->end()) {
+			nodeList->erase(it);
+		}
+	}
+
+	return node;
 }
 
 bool InstrKindInfoGetter::isBuiltInFunction(SILFunction* function) {
@@ -111,82 +135,48 @@ jobject InstrKindInfoGetter::handleApplyInst() {
 		jobject operatorNode = getOperatorCAstType(name);
 		if (operatorNode != nullptr) {
 
-		if (outs != NULL) {
-			*outs << "\t Built in operator\n";
-			for (unsigned i = 0; i < castInst->getNumArguments(); ++i) {
-				SILValue v = castInst->getArgument(i);
-				*outs << "\t [ARG] #" << i << ": " << v;
-				*outs << "\t [ADDR] #" << i << ": " << v.getOpaqueValue() << "\n";
+			if (outs != NULL) {
+				*outs << "\t Built in operator\n";
+				for (unsigned i = 0; i < castInst->getNumArguments(); ++i) {
+					SILValue v = castInst->getArgument(i);
+					*outs << "\t [ARG] #" << i << ": " << v;
+					*outs << "\t [ADDR] #" << i << ": " << v.getOpaqueValue() << "\n";
+				}
 			}
-		}
 
 			if (isUnaryOperator(castInst->getReferencedFunction())) {
-				jobject operand = nullptr;
+				// unary operator
 				SILValue argument = castInst->getArgument(castInst->getNumArguments() - 2); // the second last one (last one is metatype)
-				if (argument->getKind() == ValueKind::GlobalAddrInst) {
-					argument = castInst->getArgument(1);
-				}
-				if (nodeMap->find(argument.getOpaqueValue()) != nodeMap->end()) {
-					operand = nodeMap->at(argument.getOpaqueValue());
-				}
+				jobject operand = findAndRemoveCAstNode(argument.getOpaqueValue());
 				node = (*wala)->makeNode(CAstWrapper::UNARY_EXPR, operatorNode, operand);
-				auto operandIterator = std::find(nodeList->begin(), nodeList->end(), operand);
-				if (operandIterator != nodeList->end()) {
-					nodeList->erase(operandIterator);
-				}
 			} else {
 				// binary operator
-				jobject firstOperand = nullptr;
-				jobject secondOperand = nullptr;
 				SILValue argument0 = castInst->getArgument(castInst->getNumArguments() - 3);
 				SILValue argument1 = castInst->getArgument(castInst->getNumArguments() - 2); // the second last one (last one is metatype)
-				if (nodeMap->find(argument0.getOpaqueValue()) != nodeMap->end()) {
-					firstOperand= nodeMap->at(argument0.getOpaqueValue());
-				}
-				if (nodeMap->find(argument1.getOpaqueValue()) != nodeMap->end()) {
-					secondOperand= nodeMap->at(argument1.getOpaqueValue());
-				}
+
+				jobject firstOperand = findAndRemoveCAstNode(argument0);
+				jobject secondOperand = findAndRemoveCAstNode(argument1);
+
 				node = (*wala)->makeNode(CAstWrapper::BINARY_EXPR, operatorNode, firstOperand, secondOperand);
-				auto firstOperandIterator = std::find(nodeList->begin(), nodeList->end(), firstOperand);
-				if (firstOperandIterator != nodeList->end()) {
-					nodeList->erase(firstOperandIterator);
-				}
-				auto secondOperandIterator = std::find(nodeList->begin(), nodeList->end(), secondOperand);
-				if (secondOperandIterator != nodeList->end()) {
-					nodeList->erase(secondOperandIterator);
-				}
 			}
 			nodeMap->insert(std::make_pair(castInst, node)); // insert the node into the hash map
 			return node;
-		} else {
-		}
-
-
+		} // otherwise, fall through to the regular funcion call logic
 	} 
+
 	if (outs != NULL) {
 		*outs << "\t [CALLEE]: " << Demangle::demangleSymbolAsString(castInst->getReferencedFunction()->getName()) << "\n";
 	}
 
-	if (nodeMap->find(castInst->getReferencedFunction()) == nodeMap->end()) {
-		if (outs != NULL) {
-			*outs << "something terribly wrong happens: failed to find the CAst node for the callee\n";
-		}
-	}
-	jobject funcExprNode = nodeMap->at(castInst->getReferencedFunction());
+	jobject funcExprNode = findAndRemoveCAstNode(castInst->getReferencedFunction());
 
 	list<jobject> params;
 	for (unsigned i = 0; i < castInst->getNumArguments(); ++i) {
-		SILValue v = castInst->getArgument(i);
-		if (nodeMap->find(v.getOpaqueValue()) != nodeMap->end()) {
-			jobject child = nodeMap->at(v.getOpaqueValue());
-			params.push_back(child);
 
-			auto paramIterator = std::find(nodeList->begin(), nodeList->end(), child);
-			if (paramIterator != nodeList->end()) {
-				nodeList->erase(paramIterator);
-			}
-		} else {
-			// This should not happen in the end after we finish this class. We should have a CAst node in the map for each and every argument
+		SILValue v = castInst->getArgument(i);
+		jobject child = findAndRemoveCAstNode(v.getOpaqueValue());
+		if (child != nullptr) {
+			params.push_back(child);
 		}
 
 		if (outs != NULL) {
@@ -196,7 +186,6 @@ jobject InstrKindInfoGetter::handleApplyInst() {
 	}
 	node = (*wala)->makeNode(CAstWrapper::CALL, funcExprNode, (*wala)->makeArray(&params));
 	
-
 	nodeMap->insert(std::make_pair(castInst, node)); // insert the node into the hash map
 	return node;
 }
@@ -337,9 +326,9 @@ jobject InstrKindInfoGetter::handleStoreInst() {
 		*outs << "\t [DEST]: " << dest.getOpaqueValue() << "\n";
 	}
 
-	if (nodeMap->find(src.getOpaqueValue()) != nodeMap->end()) {
-		nodeMap->insert(std::make_pair(dest.getOpaqueValue(), nodeMap->at(src.getOpaqueValue())));
-	}
+	// if (nodeMap->find(src.getOpaqueValue()) != nodeMap->end()) {
+	// 	nodeMap->insert(std::make_pair(dest.getOpaqueValue(), nodeMap->at(src.getOpaqueValue())));
+	// }
 
 	return nullptr;
 }
@@ -386,15 +375,7 @@ jobject InstrKindInfoGetter::handleCondBranchInst() {
 
 	// 1. Condition
 	SILValue cond = castInst->getCondition();
-	jobject condNode = nullptr;
-	if (nodeMap->find(cond.getOpaqueValue()) != nodeMap->end()) {
-		condNode = nodeMap->at(cond.getOpaqueValue());
-
-		auto condIterator = std::find(nodeList->begin(), nodeList->end(), condNode);
-		if (condIterator != nodeList->end()) {
-			nodeList->erase(condIterator);
-		}
-	}
+	jobject condNode = findAndRemoveCAstNode(cond.getOpaqueValue());
 	if (outs != NULL) {
 		*outs << "\t [COND]: " << cond.getOpaqueValue() << "\n";
 	}
@@ -451,27 +432,14 @@ jobject InstrKindInfoGetter::handleAssignInst(){
 	AssignInst *castInst = cast<AssignInst>(instr);
 	*outs << "[source]:" << castInst->getSrc().getOpaqueValue() << "\n";
 	*outs << "[Dest]:" << castInst->getDest().getOpaqueValue() << "\n";
-	jobject dest = nullptr;
-	jobject expr = nullptr;
-	if (nodeMap->find(castInst->getDest().getOpaqueValue()) != nodeMap->end()) {
-		dest = nodeMap->at(castInst->getDest().getOpaqueValue());
-		auto destIterator = std::find(nodeList->begin(), nodeList->end(), dest);
-		if (destIterator != nodeList->end()) {
-			nodeList->erase(destIterator);
-		}
-	}
-	if (nodeMap->find(castInst->getSrc().getOpaqueValue()) != nodeMap->end()) {
-		expr = nodeMap->at(castInst->getSrc().getOpaqueValue());
-		auto exprIterator = std::find(nodeList->begin(), nodeList->end(), expr);
-		if (exprIterator != nodeList->end()) {
-			nodeList->erase(exprIterator);
-		}
-	}
+	jobject dest = findAndRemoveCAstNode(castInst->getDest().getOpaqueValue());
+	jobject expr = findAndRemoveCAstNode(castInst->getSrc().getOpaqueValue());
 
-	jobject assign_node = (*wala)->makeNode(CAstWrapper::ASSIGN,dest,expr);
+	jobject assign_node = (*wala)->makeNode(CAstWrapper::ASSIGN, dest, expr);
 	nodeMap->insert(std::make_pair(castInst,assign_node));
 	return assign_node;
 }
+
 ValueKind InstrKindInfoGetter::get() {
 	ValueKind instrKind = instr->getKind();
 	jobject node = nullptr;
@@ -573,21 +541,26 @@ ValueKind InstrKindInfoGetter::get() {
 		// DEFCOUNTING_INSTRUCTION(ID) <see ParseSIL.cpp:2255>
 		
 		case ValueKind::DebugValueInst: {
-			*outs << "<< DebugValueInst >>" << "\n";
 			DebugValueInst *castInst = cast<DebugValueInst>(instr);
+
 			SILDebugVariable info = castInst->getVarInfo();
-			unsigned argno = info.ArgNo;
-			*outs << argno << "\n";
+			unsigned argNo = info.ArgNo;
+
 			VarDecl *decl = castInst->getDecl();
-			StringRef param_name = decl->getNameStr();
+			StringRef varName = decl->getNameStr();
 			SILBasicBlock *parentBB = castInst->getParent();
 			
-			SILArgument *argu = parentBB->getArgument(argno - 1);
-			*outs << "\t\t[addr of arg]:" << argu << "\n";
+			SILArgument *argument = parentBB->getArgument(argNo - 1);
 
-			jobject symbol = (*wala)->makeConstant(param_name.data());		
-			node = (*wala)->makeNode(CAstWrapper::VAR,symbol);
-			nodeMap->insert(std::make_pair(argu, node));
+			// variable declaration
+			symbolTable->insert(std::make_pair(argument, varName));
+
+			if (outs != NULL) {
+				*outs << "<< DebugValueInst >>" << "\n";
+				*outs << argNo << "\n";
+				*outs << "\t\t[addr of arg]:" << argument << "\n";
+			}
+
 			break;
 		}
 		
@@ -605,10 +578,8 @@ ValueKind InstrKindInfoGetter::get() {
 			*outs << "<< LoadInst >>" << "\n";
 			LoadInst *castInst = cast<LoadInst>(instr);
 			*outs << "\t\t [name]:" << (castInst->getOperand()).getOpaqueValue() << "\n";
-			jobject node = nullptr;
-			if (nodeMap->find(castInst->getOperand().getOpaqueValue()) != nodeMap->end()) {
-				node = nodeMap->at(castInst->getOperand().getOpaqueValue());
-			}
+			node = findAndRemoveCAstNode(castInst->getOperand().getOpaqueValue());
+
 			nodeMap->insert(std::make_pair(castInst, node));
 			break;
 		}
@@ -625,14 +596,10 @@ ValueKind InstrKindInfoGetter::get() {
 			*outs << "<< BeginBorrowInst >>" << "\n";
 			BeginBorrowInst *castInst = cast<BeginBorrowInst>(instr);
 			//*outs << "\t\t [addr]:" << castInst->getOperand().getOpaqueValue() << "\n";
-			if (nodeMap->find(castInst->getOperand().getOpaqueValue()) != nodeMap->end()) {
-				node = nodeMap->at(castInst->getOperand().getOpaqueValue());
-				auto destIterator = std::find(nodeList->begin(), nodeList->end(), node);
-				if (destIterator != nodeList->end()) {
-					nodeList->erase(destIterator);
-				}
-			}
-			nodeMap->insert(std::make_pair(castInst,node));
+
+			node = findAndRemoveCAstNode(castInst->getOperand().getOpaqueValue());
+
+			nodeMap->insert(std::make_pair(castInst, node));
 			break;
 		}
 		
@@ -908,13 +875,9 @@ ValueKind InstrKindInfoGetter::get() {
 			*outs << "<< CopyValueInst >>" << "\n";
 			CopyValueInst *castInst = cast<CopyValueInst>(instr);
 			*outs << "\t\t [name]:" << castInst->getOperand() << "\n";
-			if (nodeMap->find(castInst->getOperand().getOpaqueValue()) != nodeMap->end()) {
-				node = nodeMap->at(castInst->getOperand().getOpaqueValue());
-				auto destIterator = std::find(nodeList->begin(), nodeList->end(), node);
-				if (destIterator != nodeList->end()) {
-					nodeList->erase(destIterator);
-				}
-			}
+
+			node = findAndRemoveCAstNode(castInst->getOperand().getOpaqueValue());
+
 			nodeMap->insert(std::make_pair(castInst,node));
 			break;
 		}

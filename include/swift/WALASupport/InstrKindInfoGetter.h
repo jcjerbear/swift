@@ -3,6 +3,9 @@
 
 #include "swift/WALASupport/WALAWalker.h" // included for WALAIntegration
 #include "swift/WALASupport/BasicBlockLabeller.h"
+#include <string>
+
+using std::string;
 
 namespace swift {
 
@@ -11,7 +14,7 @@ public:
 	// If not NULL, debugging info will be printed via outs
 	InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, 
 						unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList, 
-						BasicBlockLabeller* labeller,
+						unordered_map<void*, string>* symbolTable, BasicBlockLabeller* labeller,
 						raw_ostream* outs = NULL);
 	
 	ValueKind get();
@@ -21,10 +24,17 @@ private:
 	WALAIntegration* wala;
 	unordered_map<void*, jobject>* nodeMap;
 	list<jobject>* nodeList;
+	unordered_map<void*, string>* symbolTable;
 	BasicBlockLabeller* labeller;
 	raw_ostream* outs;
 
 	// member functions
+
+	// This function finds a CAst node in using the key. The node will be removed from the nodeList
+	// If the key corresponds to a variable, a new VAR CAst node will be created and returned
+	// nullptr will be returned if such node does not exist
+	jobject findAndRemoveCAstNode(void* key);
+
 	bool isBuiltInFunction(SILFunction* function);
 	bool isUnaryOperator(SILFunction* function);
 	bool isBinaryOperator(SILFunction* function);

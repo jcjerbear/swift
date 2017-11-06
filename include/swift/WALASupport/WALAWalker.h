@@ -107,7 +107,7 @@ private:
 	// through the mega-switch to cast and handle each appropriately.
 	ValueKind getInstrValueKindInfo(SILInstruction &instr, WALAIntegration &wala, 
 									unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList,
-									BasicBlockLabeller* labeller);
+									unordered_map<void*, string>* symbolTable, BasicBlockLabeller* labeller);
 
 	// Do something per instruction
 	void perInstruction(WALAWalker::InstrInfo *instrInfo, WALAIntegration &);

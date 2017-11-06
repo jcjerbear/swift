@@ -148,13 +148,13 @@ void WALAWalker::getInstrSrcInfo(SILInstruction &instr, InstrInfo *instrInfo) {
 // TODO: currently only returns ValueKind, switch is not descended into functionally
 ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr, WALAIntegration &wala, 
 											unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList,
-											BasicBlockLabeller* labeller) {
+											unordered_map<void*, string>* symbolTable, BasicBlockLabeller* labeller) {
 
 	raw_ostream& outs = llvm::outs();
 
 	outs << "address of instr below me: " << &instr << "\n";
 
-	InstrKindInfoGetter instrKindInfoGetter(&instr, &wala, nodeMap, nodeList, labeller, &outs);
+	InstrKindInfoGetter instrKindInfoGetter(&instr, &wala, nodeMap, nodeList, symbolTable, labeller, &outs);
 
 	return instrKindInfoGetter.get();
 }
@@ -188,6 +188,7 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 		wala.print(x);
 	
 	// Iterate over SILFunctions
+	unordered_map<void*, string>* symbolTable = new unordered_map<void*, string>();
 	for (auto func = SM.begin(); func != SM.end(); ++func) {
 	
 		FunctionInfo funcInfo = getSILFunctionInfo(*func);
@@ -215,7 +216,7 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 				instrInfo.num = i;
 				instrInfo.modInfo = &modInfo;
 				instrInfo.funcInfo = &funcInfo;
-				instrInfo.instrKind = getInstrValueKindInfo(*instr, wala, nodeMap, nodeList, labeller);
+				instrInfo.instrKind = getInstrValueKindInfo(*instr, wala, nodeMap, nodeList, symbolTable, labeller);
 
 				// Get each operand <SILValue> and save it in a vector; get instr ID
 				ArrayRef<Operand> ops = instr->getAllOperands();
