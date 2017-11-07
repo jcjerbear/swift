@@ -6,7 +6,6 @@
 #include <string>
 #include <list>
 #include <algorithm>
-#include <stdio.h>
 
 using namespace swift;
 using std::string;
@@ -146,16 +145,26 @@ jobject InstrKindInfoGetter::handleApplyInst() {
 
 			if (isUnaryOperator(castInst->getReferencedFunction())) {
 				// unary operator
-				SILValue argument = castInst->getArgument(castInst->getNumArguments() - 2); // the second last one (last one is metatype)
-				jobject operand = findAndRemoveCAstNode(argument.getOpaqueValue());
+				jobject operand = nullptr;
+				if (castInst->getNumArguments() >= 2) {
+					SILValue argument = castInst->getArgument(castInst->getNumArguments() - 2); // the second last one (last one is metatype)
+					operand = findAndRemoveCAstNode(argument.getOpaqueValue());
+				}
 				node = (*wala)->makeNode(CAstWrapper::UNARY_EXPR, operatorNode, operand);
 			} else {
 				// binary operator
-				SILValue argument0 = castInst->getArgument(castInst->getNumArguments() - 3);
-				SILValue argument1 = castInst->getArgument(castInst->getNumArguments() - 2); // the second last one (last one is metatype)
+				jobject firstOperand = nullptr;
+				jobject secondOperand = nullptr;
 
-				jobject firstOperand = findAndRemoveCAstNode(argument0);
-				jobject secondOperand = findAndRemoveCAstNode(argument1);
+				if (castInst->getNumArguments() >= 3) {
+					SILValue argument = castInst->getArgument(castInst->getNumArguments() - 3);
+					firstOperand = findAndRemoveCAstNode(argument);
+				}
+
+				if (castInst->getNumArguments() >= 2) {
+					SILValue argument = castInst->getArgument(castInst->getNumArguments() - 2);
+					secondOperand = findAndRemoveCAstNode(argument);
+				}
 
 				node = (*wala)->makeNode(CAstWrapper::BINARY_EXPR, operatorNode, firstOperand, secondOperand);
 			}
@@ -326,9 +335,11 @@ jobject InstrKindInfoGetter::handleStoreInst() {
 		*outs << "\t [DEST]: " << dest.getOpaqueValue() << "\n";
 	}
 
-	// if (nodeMap->find(src.getOpaqueValue()) != nodeMap->end()) {
-	// 	nodeMap->insert(std::make_pair(dest.getOpaqueValue(), nodeMap->at(src.getOpaqueValue())));
-	// }
+	// sometimes SIL creates temporary memory on the stack
+	// the following code represents the correspondence between the origial value and the new temporary location
+	if (nodeMap->find(src.getOpaqueValue()) != nodeMap->end()) {
+	 	nodeMap->insert(std::make_pair(dest.getOpaqueValue(), nodeMap->at(src.getOpaqueValue())));
+	}
 
 	return nullptr;
 }
@@ -440,12 +451,14 @@ jobject InstrKindInfoGetter::handleAssignInst(){
 	return assign_node;
 }
 
+#include <stdio.h>
+
 ValueKind InstrKindInfoGetter::get() {
 	ValueKind instrKind = instr->getKind();
 	jobject node = nullptr;
 
 	switch (instrKind) {
-	
+		
 		case ValueKind::SILPHIArgument:
 		case ValueKind::SILFunctionArgument:
 		case ValueKind::SILUndef: {		
@@ -547,7 +560,7 @@ ValueKind InstrKindInfoGetter::get() {
 			unsigned argNo = info.ArgNo;
 
 			VarDecl *decl = castInst->getDecl();
-			StringRef varName = decl->getNameStr();
+			string varName = decl->getNameStr();
 			SILBasicBlock *parentBB = castInst->getParent();
 			
 			SILArgument *argument = parentBB->getArgument(argNo - 1);
@@ -578,7 +591,7 @@ ValueKind InstrKindInfoGetter::get() {
 			*outs << "<< LoadInst >>" << "\n";
 			LoadInst *castInst = cast<LoadInst>(instr);
 			*outs << "\t\t [name]:" << (castInst->getOperand()).getOpaqueValue() << "\n";
-			node = findAndRemoveCAstNode(castInst->getOperand().getOpaqueValue());
+			node = findAndRemoveCAstNode((castInst->getOperand()).getOpaqueValue());
 
 			nodeMap->insert(std::make_pair(castInst, node));
 			break;
@@ -709,18 +722,11 @@ ValueKind InstrKindInfoGetter::get() {
 			*outs << "\t\t [oper_addr]:" << (castInst->getOperand()).getOpaqueValue() << "\n";
 			GlobalAddrInst *Global_var = (GlobalAddrInst *)(castInst->getOperand()).getOpaqueValue();
 			SILGlobalVariable* variable = Global_var->getReferencedGlobal();
-			StringRef var_name = variable->getName();
-			*outs << "\t\t[Var name]:" << var_name << "\n";
-			//*outs << ((string)var_name).c_str() << "\n";
-			//*outs << "\t\t[Addr]:" << init_inst << "\n";
-			jobject symbol = (*wala)->makeConstant(var_name.data());		
-			//jobject node = nullptr;
-			//
-			//if (nodeMap->find((castInst->getOperand()).getOpaqueValue()) != nodeMap->end()) {
-			//	node = nodeMap->at((castInst->getOperand()).getOpaqueValue());
-			//}
-			jobject read_var = (*wala)->makeNode(CAstWrapper::VAR,symbol);
-			nodeMap->insert(std::make_pair(castInst, read_var));
+			string varName = variable->getName();
+			*outs << "\t\t[Var name]:" << varName << "\n";
+
+			// variable declaration
+			symbolTable->insert(std::make_pair(castInst, varName));
 			break;
 		}
 		case ValueKind::BeginUnpairedAccessInst:{
@@ -1044,13 +1050,20 @@ ValueKind InstrKindInfoGetter::get() {
 			break;
 		}		
 		
+		case ValueKind::TryApplyInst: {
+			*outs << "<< TryApplyInst >>" << "\n";
+			break;
+		}
+
 		default: {
  			*outs << "\t\t xxxxx Not a handled inst type \n";
  			
 			break;
 		}
 	}
-
+	char instrKindStr[80];
+	sprintf (instrKindStr, "instrKind: %d\n", instrKind);
+	*outs << instrKindStr;
 	if (node != nullptr) {
 		nodeList->push_back(node);
 		//wala->print(node);
