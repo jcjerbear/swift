@@ -455,6 +455,15 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::AllocBoxInst: {
 			*outs << "<< AllocBoxInst >>" << "\n";
+			AllocBoxInst *castInst = cast<AllocBoxInst>(instr);
+
+			SILDebugVariable info = castInst->getVarInfo();
+			unsigned argNo = info.ArgNo;
+
+			VarDecl *decl = castInst->getDecl();
+			StringRef varName = decl->getNameStr();
+			*outs << "[Arg]#" << argNo << ":" << varName << "\n";
+			symbolTable->insert(std::make_pair(castInst, varName));
 			break;
 		}
 	
@@ -509,6 +518,13 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::ProjectBoxInst: {
 			*outs << "<< ProjectBoxInst >>" << "\n";
+			ProjectBoxInst *castInst = cast<ProjectBoxInst>(instr);
+			//*outs << "\t\t [addr]:" << castInst->getOperand().getOpaqueValue() << "\n";
+
+			if (symbolTable->find(castInst->getOperand().getOpaqueValue()) != symbolTable->end()) {
+				// this is a variable
+				symbolTable -> insert(std::make_pair(castInst,symbolTable->at(castInst->getOperand().getOpaqueValue()).c_str()));
+			}			
 			break;
 		}
 		
