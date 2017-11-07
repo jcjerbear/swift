@@ -1,4 +1,3 @@
-
 if (SWIFT_FORCE_OPTIMIZED_TYPECHECKER)
   set(EXTRA_TYPECHECKER_FLAGS "FORCE_BUILD_OPTIMIZED")
 endif()
@@ -10,6 +9,8 @@ if(APPLE) # for MacOS X
 else() # for Ubuntu
   set(JNI_INCLUDE_PATH "$ENV{JAVA_HOME}/include/linux")
 endif()
+
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 
 add_swift_library(swiftWALASupport STATIC
   WALAWalker.cpp

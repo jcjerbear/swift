@@ -190,8 +190,6 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 	// Iterate over SILFunctions
 	unordered_map<void*, string>* symbolTable = new unordered_map<void*, string>();
 	for (auto func = SM.begin(); func != SM.end(); ++func) {
-		
-		llvm::outs() << "A new SILFunction\n";
 		FunctionInfo funcInfo = getSILFunctionInfo(*func);
 		list<jobject>* blockStmtList = new list<jobject>();
 		BasicBlockLabeller* labeller = new BasicBlockLabeller();

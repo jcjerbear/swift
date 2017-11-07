@@ -726,7 +726,7 @@ ValueKind InstrKindInfoGetter::get() {
 			*outs << "\t\t[Var name]:" << varName << "\n";
 
 			// variable declaration
-			symbolTable->insert(std::make_pair(castInst, varName));
+			//symbolTable->insert(std::make_pair(castInst, varName));
 			break;
 		}
 		case ValueKind::BeginUnpairedAccessInst:{
