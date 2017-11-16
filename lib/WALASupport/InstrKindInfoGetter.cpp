@@ -910,8 +910,8 @@ ValueKind InstrKindInfoGetter::get() {
 			ReturnInst *castInst = cast<ReturnInst>(instr);
 			SILValue return_val = castInst->getOperand();
 
-			//*outs << "operand:" << return_val << "\n";
-			//*outs << "addr:" << return_val.getOpaqueValue() << "\n";
+			*outs << "operand:" << return_val << "\n";
+			*outs << "addr:" << return_val.getOpaqueValue() << "\n";
 			if (return_val != NULL) {
 				jobject val = nullptr;
 				val = findAndRemoveCAstNode(return_val.getOpaqueValue());
@@ -1137,6 +1137,13 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::TryApplyInst: {
 			*outs << "<< TryApplyInst >>" << "\n";
+			TryApplyInst *castInst = cast<TryApplyInst>(instr);
+			SILBasicBlock *normalbb = castInst->getNormalBB();
+			//for(unsigned i = 0; i < castInst->getNumArgs(); i++){
+				//*outs << "Argument:" << castInst->getArg(i) << "\n";
+			*outs << "addr:" << normalbb << "\n";
+  			SILBasicBlock *errorbb = castInst->getErrorBB(); 
+  			*outs << "addr:" << errorbb << "\n";
 			break;
 		}
 
@@ -1146,9 +1153,9 @@ ValueKind InstrKindInfoGetter::get() {
 			break;
 		}
 	}
-	char instrKindStr[80];
-	sprintf (instrKindStr, "instrKind: %d\n", instrKind);
-	*outs << instrKindStr;
+	//char instrKindStr[80];
+	//sprintf (instrKindStr, "instrKind: %d\n", instrKind);
+	//*outs << instrKindStr;
 	if (node != nullptr) {
 		nodeList->push_back(node);
 		//wala->print(node);

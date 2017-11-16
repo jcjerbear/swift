@@ -198,6 +198,9 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 		// Iterate over SILBasicBlocks
 		for (auto bb = func->begin(); bb != func->end(); ++bb) {
 			
+			llvm::outs() << "Basic Block: " ;
+			llvm::outs() << &*bb << "\n";
+
 			unsigned i = 0; 	// for Instruction count
 			unordered_map<void*, jobject>* nodeMap = new unordered_map<void*, jobject>();
 			list<jobject>* nodeList = new list<jobject>();
