@@ -13,7 +13,7 @@ using std::list;
 
 InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, 
 										unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList, 
-										unordered_map<void*, string>* symbolTable, BasicBlockLabeller* labeller,
+										SymbolTable* symbolTable, BasicBlockLabeller* labeller,
 										raw_ostream* outs) {
 	this->instr = instr;
 	this->wala = wala;
@@ -29,9 +29,9 @@ InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration*
 // nullptr will be returned if such node does not exist
 jobject InstrKindInfoGetter::findAndRemoveCAstNode(void* key) {
 	jobject node = nullptr;
-	if (symbolTable->find(key) != symbolTable->end()) {
+	if (symbolTable->has(key)) {
 		// this is a variable
-		jobject name = (*wala)->makeConstant(symbolTable->at(key).c_str());
+		jobject name = (*wala)->makeConstant(symbolTable->get(key).c_str());
 		node = (*wala)->makeNode(CAstWrapper::VAR, name);
 	} else if (nodeMap->find(key) != nodeMap->end()) {
 		// find
@@ -345,9 +345,9 @@ jobject InstrKindInfoGetter::handleStoreInst() {
 	}
 	
 	jobject new_node = nullptr;
-	if (symbolTable->find(dest.getOpaqueValue()) != symbolTable->end()){
+	if (symbolTable->has(dest.getOpaqueValue())){
 		jobject var = findAndRemoveCAstNode(dest.getOpaqueValue());
-		new_node = (*wala)->makeNode(CAstWrapper::ASSIGN,var,findAndRemoveCAstNode(src.getOpaqueValue()));
+		new_node = (*wala)->makeNode(CAstWrapper::ASSIGN,var, findAndRemoveCAstNode(src.getOpaqueValue()));
 	}
 
 	// sometimes SIL creates temporary memory on the stack
@@ -391,17 +391,18 @@ jobject InstrKindInfoGetter::handleBranchInst() {
 		gotoNode = (*wala)->makeNode(CAstWrapper::GOTO, labelNode);
 	}
 
-	unsigned num = castInst->getNumArgs();
-	for(int i = 0;i < num;i++){
+	for(unsigned i = 0; i < castInst->getNumArgs(); i++){
 		//*outs << "Argument:" << castInst->getArg(i) << "\n";
 		*outs << "addr:" << destBasicBlock->getArgument(i) << "\n";
 		jobject node = findAndRemoveCAstNode(castInst->getArg(i).getOpaqueValue());
-		jobject var_name = (*wala)->makeConstant(("argument" + std::to_string(i)).c_str());
-		jobject var = (*wala)->makeNode(CAstWrapper::VAR,var_name);
-		jobject assign = (*wala)->makeNode(CAstWrapper::ASSIGN,var,node);
+		symbolTable->insert(destBasicBlock->getArgument(i), ("argument" + std::to_string(i)));
+
+		jobject varName = (*wala)->makeConstant(symbolTable->get(destBasicBlock->getArgument(i)).c_str());
+		jobject var = (*wala)->makeNode(CAstWrapper::VAR, varName);
+		jobject assign = (*wala)->makeNode(CAstWrapper::ASSIGN, var, node);
 		nodeList->push_back(assign);
-		symbolTable->insert(std::make_pair(destBasicBlock->getArgument(i),("argument" + std::to_string(i))));
 	}
+	
 	return gotoNode;
 }
 
@@ -506,7 +507,7 @@ ValueKind InstrKindInfoGetter::get() {
 			VarDecl *decl = castInst->getDecl();
 			StringRef varName = decl->getNameStr();
 			*outs << "[Arg]#" << argNo << ":" << varName << "\n";
-			symbolTable->insert(std::make_pair(castInst, varName));
+			symbolTable->insert(castInst, varName);
 			break;
 		}
 	
@@ -564,9 +565,9 @@ ValueKind InstrKindInfoGetter::get() {
 			ProjectBoxInst *castInst = cast<ProjectBoxInst>(instr);
 			//*outs << "\t\t [addr]:" << castInst->getOperand().getOpaqueValue() << "\n";
 
-			if (symbolTable->find(castInst->getOperand().getOpaqueValue()) != symbolTable->end()) {
+			if (symbolTable->has(castInst->getOperand().getOpaqueValue())) {
 				// this is a variable
-				symbolTable -> insert(std::make_pair(castInst,symbolTable->at(castInst->getOperand().getOpaqueValue()).c_str()));
+				symbolTable->duplicate(castInst, symbolTable->get(castInst->getOperand().getOpaqueValue()).c_str());
 			}			
 			break;
 		}
@@ -620,7 +621,7 @@ ValueKind InstrKindInfoGetter::get() {
 				if (argNo >= 1) {
 					argument = parentBB->getArgument(argNo - 1);
 					// variable declaration
-					symbolTable->insert(std::make_pair(argument, varName));
+					symbolTable->insert(argument, varName);
 				}
 
 				if (outs != NULL) {
@@ -907,25 +908,19 @@ ValueKind InstrKindInfoGetter::get() {
 		case ValueKind::ReturnInst: {		
 			*outs << "<< ReturnInst >>" << "\n";
 			ReturnInst *castInst = cast<ReturnInst>(instr);
-			SILValue return_val = NULL;
-			return_val = castInst->getOperand();
-			ArrayRef<Operand> ar = castInst->getAllOperands();
-			for(int i = 0;i < ar.size();i++){
-				*outs << "operand:" << ar[i].get() << "\n";
-				*outs << "addr:" << ar[i].get().getOpaqueValue() << "\n";				
-			}
+			SILValue return_val = castInst->getOperand();
+
 			//*outs << "operand:" << return_val << "\n";
 			//*outs << "addr:" << return_val.getOpaqueValue() << "\n";
-			if(return_val != NULL){
+			if (return_val != NULL) {
 				jobject val = nullptr;
 				val = findAndRemoveCAstNode(return_val.getOpaqueValue());
-				if(val == nullptr){
+				if (val == nullptr) {
 					node = (*wala)->makeNode(CAstWrapper::RETURN);
+				} else {
+					node = (*wala)->makeNode(CAstWrapper::RETURN, val);
 				}
-				else{
-					node = (*wala)->makeNode(CAstWrapper::RETURN,val);
-				}
-				nodeMap->insert(std::make_pair(castInst,node));
+				nodeMap->insert(std::make_pair(castInst, node));
 			}
 			break;
 		}
@@ -1056,7 +1051,7 @@ ValueKind InstrKindInfoGetter::get() {
 			//*outs << ((string)var_name).c_str() << "\n";
 			//*outs << "\t\t[Addr]:" << init_inst << "\n";
 			//jobject symbol = (*wala)->makeConstant(var_name.data());
-			symbolTable->insert(std::make_pair(castInst, var_name));
+			symbolTable->insert(castInst, var_name);
 			break;
 		}
 		

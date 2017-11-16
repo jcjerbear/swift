@@ -148,7 +148,7 @@ void WALAWalker::getInstrSrcInfo(SILInstruction &instr, InstrInfo *instrInfo) {
 // TODO: currently only returns ValueKind, switch is not descended into functionally
 ValueKind WALAWalker::getInstrValueKindInfo(SILInstruction &instr, WALAIntegration &wala, 
 											unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList,
-											unordered_map<void*, string>* symbolTable, BasicBlockLabeller* labeller) {
+											SymbolTable* symbolTable, BasicBlockLabeller* labeller) {
 
 	raw_ostream& outs = llvm::outs();
 
@@ -188,7 +188,7 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 		wala.print(x);
 	
 	// Iterate over SILFunctions
-	unordered_map<void*, string>* symbolTable = new unordered_map<void*, string>();
+	SymbolTable* symbolTable = new SymbolTable();
 	for (auto func = SM.begin(); func != SM.end(); ++func) {
 		
 		FunctionInfo funcInfo = getSILFunctionInfo(*func);

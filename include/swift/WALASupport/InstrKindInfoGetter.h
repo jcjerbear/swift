@@ -3,6 +3,7 @@
 
 #include "swift/WALASupport/WALAWalker.h" // included for WALAIntegration
 #include "swift/WALASupport/BasicBlockLabeller.h"
+#include "swift/WALASupport/SymbolTable.h"
 #include <string>
 
 using std::string;
@@ -14,7 +15,7 @@ public:
 	// If not NULL, debugging info will be printed via outs
 	InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, 
 						unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList, 
-						unordered_map<void*, string>* symbolTable, BasicBlockLabeller* labeller,
+						SymbolTable* symbolTable, BasicBlockLabeller* labeller,
 						raw_ostream* outs = NULL);
 	
 	ValueKind get();
@@ -24,7 +25,7 @@ private:
 	WALAIntegration* wala;
 	unordered_map<void*, jobject>* nodeMap;
 	list<jobject>* nodeList;
-	unordered_map<void*, string>* symbolTable;
+	SymbolTable* symbolTable;
 	BasicBlockLabeller* labeller;
 	raw_ostream* outs;
 
