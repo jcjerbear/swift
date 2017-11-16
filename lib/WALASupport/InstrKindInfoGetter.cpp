@@ -29,7 +29,6 @@ InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration*
 // nullptr will be returned if such node does not exist
 jobject InstrKindInfoGetter::findAndRemoveCAstNode(void* key) {
 	jobject node = nullptr;
-
 	if (symbolTable->find(key) != symbolTable->end()) {
 		// this is a variable
 		jobject name = (*wala)->makeConstant(symbolTable->at(key).c_str());
@@ -331,8 +330,18 @@ jobject InstrKindInfoGetter::handleStoreInst() {
 	SILValue src = castInst->getSrc();
 	SILValue dest = castInst->getDest();
 	if (outs != NULL) {
+		char instrKindStr[80];
 		*outs << "\t [SRC]: " << src.getOpaqueValue() << "\n";
+		sprintf (instrKindStr, "instrKind: %d\n", src->getKind());
+		*outs << instrKindStr;
+		if (src->getKind() == ValueKind::SILPHIArgument) {
+			*outs << "Yes, this is SILPHIArgument\n";
+		}
+		if (src->getKind() == ValueKind::SILFunctionArgument) {
+			*outs << "Yes, this is SILFunctionArgument\n";
+		}
 		*outs << "\t [DEST]: " << dest.getOpaqueValue() << "\n";
+		*outs << instrKindStr;
 	}
 
 	// sometimes SIL creates temporary memory on the stack
@@ -559,19 +568,27 @@ ValueKind InstrKindInfoGetter::get() {
 			SILDebugVariable info = castInst->getVarInfo();
 			unsigned argNo = info.ArgNo;
 
-			VarDecl *decl = castInst->getDecl();
-			string varName = decl->getNameStr();
-			SILBasicBlock *parentBB = castInst->getParent();
-			
-			SILArgument *argument = parentBB->getArgument(argNo - 1);
-
-			// variable declaration
-			symbolTable->insert(std::make_pair(argument, varName));
-
 			if (outs != NULL) {
 				*outs << "<< DebugValueInst >>" << "\n";
 				*outs << argNo << "\n";
-				*outs << "\t\t[addr of arg]:" << argument << "\n";
+			}
+
+			VarDecl *decl = castInst->getDecl();
+			if (decl != NULL) {
+				string varName = decl->getNameStr();
+				SILBasicBlock *parentBB = castInst->getParent();
+				
+				SILArgument *argument = NULL;
+
+				if (argNo >= 1) {
+					argument = parentBB->getArgument(argNo - 1);
+					// variable declaration
+					symbolTable->insert(std::make_pair(argument, varName));
+				}
+
+				if (outs != NULL) {
+					*outs << "\t\t[addr of arg]:" << argument << "\n";
+				}
 			}
 
 			break;
@@ -652,7 +669,6 @@ ValueKind InstrKindInfoGetter::get() {
 		case ValueKind::UnmanagedToRefInst:
 		case ValueKind::ThinFunctionToPointerInst:
 		case ValueKind::PointerToThinFunctionInst:
-		case ValueKind::ThinToThickFunctionInst:
 		case ValueKind::ThickToObjCMetatypeInst:
 		case ValueKind::ObjCToThickMetatypeInst:
 		case ValueKind::ConvertFunctionInst:
@@ -662,6 +678,24 @@ ValueKind InstrKindInfoGetter::get() {
   			break;
   		}
   		
+		case ValueKind::ThinToThickFunctionInst: {
+
+			// ValueKind identifier
+			if (outs != NULL) {
+				*outs << "<< ThinToThickFunctionInst >>" << "\n";
+			}
+
+			// Cast the instr to access methods
+			ThinToThickFunctionInst *castInst = cast<ThinToThickFunctionInst>(instr);
+
+			if (outs != NULL) {
+				*outs << "Callee: ";
+				*outs << castInst->getCallee().getOpaqueValue() << "\n";
+			}
+
+			break;
+		}
+
   		case ValueKind::PointerToAddressInst: {
 			*outs << "<< PointerToAddressInst >>" << "\n";
 			break;
@@ -719,14 +753,9 @@ ValueKind InstrKindInfoGetter::get() {
 		case ValueKind::BeginAccessInst:{
 			*outs << "<< Begin Access >>" << "\n";
 			BeginAccessInst *castInst = cast<BeginAccessInst>(instr);
-			*outs << "\t\t [oper_addr]:" << (castInst->getOperand()).getOpaqueValue() << "\n";
-			GlobalAddrInst *Global_var = (GlobalAddrInst *)(castInst->getOperand()).getOpaqueValue();
-			SILGlobalVariable* variable = Global_var->getReferencedGlobal();
-			string varName = variable->getName();
-			*outs << "\t\t[Var name]:" << varName << "\n";
-
-			// variable declaration
-			//symbolTable->insert(std::make_pair(castInst, varName));
+			*outs << "\t\t [oper_addr]:" << (castInst->getSource()).getOpaqueValue() << "\n";
+			jobject read_var = findAndRemoveCAstNode(castInst->getSource().getOpaqueValue());
+			nodeMap->insert(std::make_pair(castInst, read_var));
 			break;
 		}
 		case ValueKind::BeginUnpairedAccessInst:{
@@ -965,8 +994,8 @@ ValueKind InstrKindInfoGetter::get() {
 			*outs << "\t\t[Var name]:" << var_name << "\n";
 			//*outs << ((string)var_name).c_str() << "\n";
 			//*outs << "\t\t[Addr]:" << init_inst << "\n";
-			jobject symbol = (*wala)->makeConstant(var_name.data());
-			nodeMap->insert(std::make_pair(castInst, symbol));
+			//jobject symbol = (*wala)->makeConstant(var_name.data());
+			symbolTable->insert(std::make_pair(castInst, var_name));
 			break;
 		}
 		

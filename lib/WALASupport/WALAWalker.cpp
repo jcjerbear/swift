@@ -190,6 +190,7 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 	// Iterate over SILFunctions
 	unordered_map<void*, string>* symbolTable = new unordered_map<void*, string>();
 	for (auto func = SM.begin(); func != SM.end(); ++func) {
+		
 		FunctionInfo funcInfo = getSILFunctionInfo(*func);
 		list<jobject>* blockStmtList = new list<jobject>();
 		BasicBlockLabeller* labeller = new BasicBlockLabeller();
@@ -197,7 +198,6 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 		// Iterate over SILBasicBlocks
 		for (auto bb = func->begin(); bb != func->end(); ++bb) {
 			
-			llvm::outs() << "A new SILBasicBlock\n";
 			unsigned i = 0; 	// for Instruction count
 			unordered_map<void*, jobject>* nodeMap = new unordered_map<void*, jobject>();
 			list<jobject>* nodeList = new list<jobject>();
@@ -235,7 +235,6 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 				++i;
 			
 			}	// end SILInstruction
-
 			if (nodeList->size() > 0) {
 				jobject labelNode = wala->makeConstant(labeller->label(&*bb).c_str());
 				jobject labelStmt = wala->makeNode(CAstWrapper::LABEL_STMT, labelNode, nodeList->front());
