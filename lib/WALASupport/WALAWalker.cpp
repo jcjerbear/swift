@@ -190,14 +190,14 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 	// Iterate over SILFunctions
 	unordered_map<void*, string>* symbolTable = new unordered_map<void*, string>();
 	for (auto func = SM.begin(); func != SM.end(); ++func) {
-	
+		
 		FunctionInfo funcInfo = getSILFunctionInfo(*func);
 		list<jobject>* blockStmtList = new list<jobject>();
 		BasicBlockLabeller* labeller = new BasicBlockLabeller();
 
 		// Iterate over SILBasicBlocks
 		for (auto bb = func->begin(); bb != func->end(); ++bb) {
-		
+			
 			unsigned i = 0; 	// for Instruction count
 			unordered_map<void*, jobject>* nodeMap = new unordered_map<void*, jobject>();
 			list<jobject>* nodeList = new list<jobject>();
@@ -230,13 +230,11 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 				instrInfo.ops = llvm::ArrayRef<SILValue>(vals);
 				
 				// Pass instrInfo to perInstruction, where actions can be taken
-				llvm::outs() << "\t isASTNode(): " << instr->getLoc().isASTNode() << "\n\n";
 				perInstruction(&instrInfo, wala);
 				
 				++i;
 			
 			}	// end SILInstruction
-
 			if (nodeList->size() > 0) {
 				jobject labelNode = wala->makeConstant(labeller->label(&*bb).c_str());
 				jobject labelStmt = wala->makeNode(CAstWrapper::LABEL_STMT, labelNode, nodeList->front());
@@ -254,7 +252,8 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 		delete blockStmtList;
 		delete labeller;
 	}	// end SILFunction
-	
+	delete symbolTable;
+
 	START_CATCH_BLOCK()
 		if (java_env->ExceptionCheck()) {
 			jthrowable real_ex = java_env->ExceptionOccurred();

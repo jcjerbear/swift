@@ -6,7 +6,6 @@
 #include <string>
 #include <list>
 #include <algorithm>
-#include <stdio.h>
 
 using namespace swift;
 using std::string;
@@ -30,7 +29,6 @@ InstrKindInfoGetter::InstrKindInfoGetter(SILInstruction* instr, WALAIntegration*
 // nullptr will be returned if such node does not exist
 jobject InstrKindInfoGetter::findAndRemoveCAstNode(void* key) {
 	jobject node = nullptr;
-
 	if (symbolTable->find(key) != symbolTable->end()) {
 		// this is a variable
 		jobject name = (*wala)->makeConstant(symbolTable->at(key).c_str());
@@ -146,16 +144,26 @@ jobject InstrKindInfoGetter::handleApplyInst() {
 
 			if (isUnaryOperator(castInst->getReferencedFunction())) {
 				// unary operator
-				SILValue argument = castInst->getArgument(castInst->getNumArguments() - 2); // the second last one (last one is metatype)
-				jobject operand = findAndRemoveCAstNode(argument.getOpaqueValue());
+				jobject operand = nullptr;
+				if (castInst->getNumArguments() >= 2) {
+					SILValue argument = castInst->getArgument(castInst->getNumArguments() - 2); // the second last one (last one is metatype)
+					operand = findAndRemoveCAstNode(argument.getOpaqueValue());
+				}
 				node = (*wala)->makeNode(CAstWrapper::UNARY_EXPR, operatorNode, operand);
 			} else {
 				// binary operator
-				SILValue argument0 = castInst->getArgument(castInst->getNumArguments() - 3);
-				SILValue argument1 = castInst->getArgument(castInst->getNumArguments() - 2); // the second last one (last one is metatype)
+				jobject firstOperand = nullptr;
+				jobject secondOperand = nullptr;
 
-				jobject firstOperand = findAndRemoveCAstNode(argument0);
-				jobject secondOperand = findAndRemoveCAstNode(argument1);
+				if (castInst->getNumArguments() >= 3) {
+					SILValue argument = castInst->getArgument(castInst->getNumArguments() - 3);
+					firstOperand = findAndRemoveCAstNode(argument);
+				}
+
+				if (castInst->getNumArguments() >= 2) {
+					SILValue argument = castInst->getArgument(castInst->getNumArguments() - 2);
+					secondOperand = findAndRemoveCAstNode(argument);
+				}
 
 				node = (*wala)->makeNode(CAstWrapper::BINARY_EXPR, operatorNode, firstOperand, secondOperand);
 			}
@@ -322,17 +330,31 @@ jobject InstrKindInfoGetter::handleStoreInst() {
 	SILValue src = castInst->getSrc();
 	SILValue dest = castInst->getDest();
 	if (outs != NULL) {
+		char instrKindStr[80];
 		*outs << "\t [SRC]: " << src.getOpaqueValue() << "\n";
+		sprintf (instrKindStr, "instrKind: %d\n", src->getKind());
+		*outs << instrKindStr;
+		if (src->getKind() == ValueKind::SILPHIArgument) {
+			*outs << "Yes, this is SILPHIArgument\n";
+		}
+		if (src->getKind() == ValueKind::SILFunctionArgument) {
+			*outs << "Yes, this is SILFunctionArgument\n";
+		}
 		*outs << "\t [DEST]: " << dest.getOpaqueValue() << "\n";
+		*outs << instrKindStr;
 	}
+	
 	jobject new_node = nullptr;
 	if (symbolTable->find(dest.getOpaqueValue()) != symbolTable->end()){
 		jobject var = findAndRemoveCAstNode(dest.getOpaqueValue());
 		new_node = (*wala)->makeNode(CAstWrapper::ASSIGN,var,findAndRemoveCAstNode(src.getOpaqueValue()));
 	}
-	// if (nodeMap->find(src.getOpaqueValue()) != nodeMap->end()) {
-	// 	nodeMap->insert(std::make_pair(dest.getOpaqueValue(), nodeMap->at(src.getOpaqueValue())));
-	// }
+
+	// sometimes SIL creates temporary memory on the stack
+	// the following code represents the correspondence between the origial value and the new temporary location
+	if (nodeMap->find(src.getOpaqueValue()) != nodeMap->end()) {
+	 	nodeMap->insert(std::make_pair(dest.getOpaqueValue(), nodeMap->at(src.getOpaqueValue())));
+	}
 
 	return new_node;
 }
@@ -459,12 +481,14 @@ jobject InstrKindInfoGetter::handleAssignInst(){
 	return assign_node;
 }
 
+#include <stdio.h>
+
 ValueKind InstrKindInfoGetter::get() {
 	ValueKind instrKind = instr->getKind();
 	jobject node = nullptr;
 
 	switch (instrKind) {
-	
+		
 		case ValueKind::SILPHIArgument:
 		case ValueKind::SILFunctionArgument:
 		case ValueKind::SILUndef: {		
@@ -581,19 +605,27 @@ ValueKind InstrKindInfoGetter::get() {
 			SILDebugVariable info = castInst->getVarInfo();
 			unsigned argNo = info.ArgNo;
 
-			VarDecl *decl = castInst->getDecl();
-			StringRef varName = decl->getNameStr();
-			SILBasicBlock *parentBB = castInst->getParent();
-			
-			SILArgument *argument = parentBB->getArgument(argNo - 1);
-
-			// variable declaration
-			symbolTable->insert(std::make_pair(argument, varName));
-
 			if (outs != NULL) {
 				*outs << "<< DebugValueInst >>" << "\n";
 				*outs << argNo << "\n";
-				*outs << "\t\t[addr of arg]:" << argument << "\n";
+			}
+
+			VarDecl *decl = castInst->getDecl();
+			if (decl != NULL) {
+				string varName = decl->getNameStr();
+				SILBasicBlock *parentBB = castInst->getParent();
+				
+				SILArgument *argument = NULL;
+
+				if (argNo >= 1) {
+					argument = parentBB->getArgument(argNo - 1);
+					// variable declaration
+					symbolTable->insert(std::make_pair(argument, varName));
+				}
+
+				if (outs != NULL) {
+					*outs << "\t\t[addr of arg]:" << argument << "\n";
+				}
 			}
 
 			break;
@@ -613,7 +645,7 @@ ValueKind InstrKindInfoGetter::get() {
 			*outs << "<< LoadInst >>" << "\n";
 			LoadInst *castInst = cast<LoadInst>(instr);
 			*outs << "\t\t [name]:" << (castInst->getOperand()).getOpaqueValue() << "\n";
-			node = findAndRemoveCAstNode(castInst->getOperand().getOpaqueValue());
+			node = findAndRemoveCAstNode((castInst->getOperand()).getOpaqueValue());
 
 			nodeMap->insert(std::make_pair(castInst, node));
 			break;
@@ -674,7 +706,6 @@ ValueKind InstrKindInfoGetter::get() {
 		case ValueKind::UnmanagedToRefInst:
 		case ValueKind::ThinFunctionToPointerInst:
 		case ValueKind::PointerToThinFunctionInst:
-		case ValueKind::ThinToThickFunctionInst:
 		case ValueKind::ThickToObjCMetatypeInst:
 		case ValueKind::ObjCToThickMetatypeInst:
 		case ValueKind::ConvertFunctionInst:
@@ -684,6 +715,24 @@ ValueKind InstrKindInfoGetter::get() {
   			break;
   		}
   		
+		case ValueKind::ThinToThickFunctionInst: {
+
+			// ValueKind identifier
+			if (outs != NULL) {
+				*outs << "<< ThinToThickFunctionInst >>" << "\n";
+			}
+
+			// Cast the instr to access methods
+			ThinToThickFunctionInst *castInst = cast<ThinToThickFunctionInst>(instr);
+
+			if (outs != NULL) {
+				*outs << "Callee: ";
+				*outs << castInst->getCallee().getOpaqueValue() << "\n";
+			}
+
+			break;
+		}
+
   		case ValueKind::PointerToAddressInst: {
 			*outs << "<< PointerToAddressInst >>" << "\n";
 			break;
@@ -1091,13 +1140,20 @@ ValueKind InstrKindInfoGetter::get() {
 			break;
 		}		
 		
+		case ValueKind::TryApplyInst: {
+			*outs << "<< TryApplyInst >>" << "\n";
+			break;
+		}
+
 		default: {
  			*outs << "\t\t xxxxx Not a handled inst type \n";
  			
 			break;
 		}
 	}
-
+	char instrKindStr[80];
+	sprintf (instrKindStr, "instrKind: %d\n", instrKind);
+	*outs << instrKindStr;
 	if (node != nullptr) {
 		nodeList->push_back(node);
 		//wala->print(node);
