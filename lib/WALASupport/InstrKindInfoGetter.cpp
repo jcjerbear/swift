@@ -325,12 +325,16 @@ jobject InstrKindInfoGetter::handleStoreInst() {
 		*outs << "\t [SRC]: " << src.getOpaqueValue() << "\n";
 		*outs << "\t [DEST]: " << dest.getOpaqueValue() << "\n";
 	}
-
+	jobject new_node = nullptr;
+	if (symbolTable->find(dest.getOpaqueValue()) != symbolTable->end()){
+		jobject var = findAndRemoveCAstNode(dest.getOpaqueValue());
+		new_node = (*wala)->makeNode(CAstWrapper::ASSIGN,var,findAndRemoveCAstNode(src.getOpaqueValue()));
+	}
 	// if (nodeMap->find(src.getOpaqueValue()) != nodeMap->end()) {
 	// 	nodeMap->insert(std::make_pair(dest.getOpaqueValue(), nodeMap->at(src.getOpaqueValue())));
 	// }
 
-	return nullptr;
+	return new_node;
 }
 
 jobject InstrKindInfoGetter::handleBranchInst() {
@@ -354,6 +358,10 @@ jobject InstrKindInfoGetter::handleBranchInst() {
 			for (auto& instr : *destBasicBlock) {
 				*outs << "\t\t [INST" << i++ << "]: " << &instr << "\n";
 			}
+			/*
+			for(auto& argument : destBasicBlock->getArguments()){
+				*outs << "addr of argument:" << argument << "\n";
+			}*/
 		}
 	}
 	if (destBasicBlock != NULL) {
@@ -361,6 +369,17 @@ jobject InstrKindInfoGetter::handleBranchInst() {
 		gotoNode = (*wala)->makeNode(CAstWrapper::GOTO, labelNode);
 	}
 
+	unsigned num = castInst->getNumArgs();
+	for(int i = 0;i < num;i++){
+		//*outs << "Argument:" << castInst->getArg(i) << "\n";
+		*outs << "addr:" << destBasicBlock->getArgument(i) << "\n";
+		jobject node = findAndRemoveCAstNode(castInst->getArg(i).getOpaqueValue());
+		jobject var_name = (*wala)->makeConstant(("argument" + std::to_string(i)).c_str());
+		jobject var = (*wala)->makeNode(CAstWrapper::VAR,var_name);
+		jobject assign = (*wala)->makeNode(CAstWrapper::ASSIGN,var,node);
+		nodeList->push_back(assign);
+		symbolTable->insert(std::make_pair(destBasicBlock->getArgument(i),("argument" + std::to_string(i))));
+	}
 	return gotoNode;
 }
 
@@ -723,18 +742,6 @@ ValueKind InstrKindInfoGetter::get() {
 			*outs << "<< Begin Access >>" << "\n";
 			BeginAccessInst *castInst = cast<BeginAccessInst>(instr);
 			*outs << "\t\t [oper_addr]:" << (castInst->getSource()).getOpaqueValue() << "\n";
-			//GlobalAddrInst *Global_var = (GlobalAddrInst *)(castInst->getOperand()).getOpaqueValue();
-			//SILGlobalVariable* variable = Global_var->getReferencedGlobal();
-			//StringRef var_name = variable->getName();
-			//*outs << "\t\t[Var name]:" << var_name << "\n";
-			//*outs << ((string)var_name).c_str() << "\n";
-			//*outs << "\t\t[Addr]:" << init_inst << "\n";
-			//jobject symbol = (*wala)->makeConstant(var_name.data());		
-			//jobject node = nullptr;
-			//
-			//if (nodeMap->find((castInst->getOperand()).getOpaqueValue()) != nodeMap->end()) {
-			//	node = nodeMap->at((castInst->getOperand()).getOpaqueValue());
-			//}
 			jobject read_var = findAndRemoveCAstNode(castInst->getSource().getOpaqueValue());
 			nodeMap->insert(std::make_pair(castInst, read_var));
 			break;
@@ -819,6 +826,9 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::TupleInst: {		
 			*outs << "<< TupleInst >>" << "\n";
+			TupleInst *castInst = cast<TupleInst>(instr);
+			//OperandValueArrayRef getElements()
+
 			break;
 		}
 		
@@ -847,6 +857,27 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::ReturnInst: {		
 			*outs << "<< ReturnInst >>" << "\n";
+			ReturnInst *castInst = cast<ReturnInst>(instr);
+			SILValue return_val = NULL;
+			return_val = castInst->getOperand();
+			ArrayRef<Operand> ar = castInst->getAllOperands();
+			for(int i = 0;i < ar.size();i++){
+				*outs << "operand:" << ar[i].get() << "\n";
+				*outs << "addr:" << ar[i].get().getOpaqueValue() << "\n";				
+			}
+			//*outs << "operand:" << return_val << "\n";
+			//*outs << "addr:" << return_val.getOpaqueValue() << "\n";
+			if(return_val != NULL){
+				jobject val = nullptr;
+				val = findAndRemoveCAstNode(return_val.getOpaqueValue());
+				if(val == nullptr){
+					node = (*wala)->makeNode(CAstWrapper::RETURN);
+				}
+				else{
+					node = (*wala)->makeNode(CAstWrapper::RETURN,val);
+				}
+				nodeMap->insert(std::make_pair(castInst,node));
+			}
 			break;
 		}
 		
@@ -1071,6 +1102,7 @@ ValueKind InstrKindInfoGetter::get() {
 		nodeList->push_back(node);
 		//wala->print(node);
 	}
+
 	*outs << *instr << "\n";
 	return instrKind;
 }
