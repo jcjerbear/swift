@@ -1,16 +1,13 @@
-//switch statements
+/*enum types
+ *
+ * Here we simply create an enum, enstantiate it and print out different values.
+ */
+
 enum Colour{
   case yellow, red, blue, green, black
 }
-let c = Colour.red 
-var colourName: String
-switch(c){
-  case .yellow: colourName = "yellow"
-  case .red:    colourName = "red"
-  case .blue:   colourName = "blue"
-  case .gree:   colourName = "green"
-  case .black:  colourName = "black"
-  default: colourName = "Invalid Colour"
-}
-print("The colour is: \(colourName)")
+var c:Colour = Colour.red
+print("The colour the enum is \(c)")
 
+c = Colour.blue
+print("The colour the enum is \(c)")

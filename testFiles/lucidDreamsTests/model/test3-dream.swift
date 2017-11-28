@@ -1,12 +1,20 @@
-//operator overloading
-//inhetiring equitable
-
+/*
+ * operator overloading
+ * inheriting equitable
+ * 
+ *
+ * The reason why inheritance and operator overloading are both in this testcase is because they
+ * depend on each other in this case. We are inheriting a protocol that forces us to implement
+ * operator overloaded functions for equality.
+ *
+ */
 struct Person: Equatable{
   var name: String
   init(_ name:String){
     self.name = name
   }
 }
+
 func ==(_ p1:Person, _ p2:Person)->Bool{
   return p1.name == p2.name 
 }

@@ -1,6 +1,11 @@
 
 
-//localized variable calculation through switch staement
+/*localized variable calculation through switch statement
+ *
+ * Here we are using a switch statement to directly assign the value of a variable within a class.
+ * This is basically syntactic sugar as we are able to return a value within brackets which will be assigned
+ * to the variable.
+ */
 
 struct Person: Equatable{
   var name: String

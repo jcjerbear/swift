@@ -1,7 +1,8 @@
 
 
-//localized enum
-//switch within function
+/*
+ * Here we use localized enums in structs and use switch statements with implecit type decuction within functions.
+ */
 
 struct Person: Equatable{
   var name: String
