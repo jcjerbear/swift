@@ -63,5 +63,5 @@ htmlcov
 #Symlink to the swiftc script
 swiftc
 
-lucidDreamsTests/model/test*.swift
+testfiles/lucidDreamsTests/model/temp*.swift
 
