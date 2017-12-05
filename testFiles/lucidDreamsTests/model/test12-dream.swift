@@ -2,8 +2,10 @@
  * extension
  * 
  * Testing a simple extension of the person class.
- * The extension adds two functions, one that returns nothing and another that returns a string.
+ * The extension adds two functions, one that returns nothing and another that
+ * returns a string.
  */
+
 struct Person{
   var name: String
   var profession: Profession
@@ -25,7 +27,6 @@ struct Person{
 
 
 //new code specific to this testcase.
-
 extension Person{
   func say(phrase: String){
     print(phrase)

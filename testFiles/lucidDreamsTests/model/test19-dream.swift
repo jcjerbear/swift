@@ -10,7 +10,7 @@ struct Person{
   func printName() {
     guard let unwrappedName = name else {
       print("There is no name provided")
-      return 
+      return
     }
     print(unwrappedName)
   }

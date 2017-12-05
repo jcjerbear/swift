@@ -13,7 +13,7 @@ class Person: Equatable{
   enum Profession{
     case student, teacher
   }
-  var professionName:String{
+  var professionName:String {
       switch(self.profession){
           case .student: return "student"
           case .teacher: return "teacher"
