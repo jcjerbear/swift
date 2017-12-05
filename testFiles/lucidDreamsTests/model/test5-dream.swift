@@ -1,4 +1,8 @@
-//switch statements
+/*
+ * switch statements
+ * 
+ * Here we are switching on multiple values at the same time. 
+ */
 enum Colour{
   case yellow, red, blue, green, black
 }

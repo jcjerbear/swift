@@ -1,7 +1,10 @@
-//operator overloading
-//Inheritance
+/*
+ * operator overloading
+ *
+ * Helps us compare multiple structures of the same type.
+ */
 
-struct Person: Equatable{
+struct Person{
   var name: String
   init(_ name:String){
     self.name = name

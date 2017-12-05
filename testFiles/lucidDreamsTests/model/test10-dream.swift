@@ -1,8 +1,13 @@
 
 
-//localized variable calculation through switch staement
+/*
+ *localized variable calculation through switch staement
+ *
+ * Here we do a similar thing to test9, but with a class which has different memory
+ * management than a struct. 
+ */
 
-struct Person: Equatable{
+class Person: Equatable{
   var name: String
   var profession: Profession
   enum Profession{

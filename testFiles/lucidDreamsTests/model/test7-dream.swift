@@ -1,6 +1,11 @@
+/*
+ * localized enum
+ * 
+ * Here we create a struct and create an enum type within it.
+ * This allows us to have specialized enum types for each of the different classes that we have.
+ * 
+ */
 
-
-//localized enum
 
 struct Person{
   var name: String
@@ -15,11 +20,5 @@ struct Person{
 }
 
 var p1: Person = Person("Yaser",Person.Profession.student)
-var prof:String
-switch (p1.profession){
-  case .student: prof = "student"
-  case .teacher: prof = "teacher"
-  default:       prof = "ERROR"
-}
 
-print("The person is \(p1.name) and their profession is\(prof)")
+print("The person is \(p1.name) and their profession is \(p1.profession)")
