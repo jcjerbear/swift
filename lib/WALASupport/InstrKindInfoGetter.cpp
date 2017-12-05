@@ -304,7 +304,6 @@ jobject InstrKindInfoGetter::handleFunctionRefInst() {
 
 	// Cast the instr to access methods
 	FunctionRefInst *castInst = cast<FunctionRefInst>(instr);
-	
 	string funcName = Demangle::demangleSymbolAsString(castInst->getReferencedFunction()->getName());
 	jobject nameNode = (*wala)->makeConstant(funcName.c_str());
 	jobject funcExprNode = (*wala)->makeNode(CAstWrapper::FUNCTION_EXPR, nameNode);
@@ -315,7 +314,7 @@ jobject InstrKindInfoGetter::handleFunctionRefInst() {
 	}
 
 	nodeMap->insert(std::make_pair(castInst->getReferencedFunction(), funcExprNode));
-
+	nodeMap->insert(std::make_pair(castInst, funcExprNode));
 	return nullptr;
 }
 
@@ -628,7 +627,7 @@ ValueKind InstrKindInfoGetter::get() {
 					*outs << "\t\t[addr of arg]:" << argument << "\n";
 				}
 			}
-
+			*outs << "\t\t[addr of arg]:" << castInst->getOperand().getOpaqueValue() << "\n";
 			break;
 		}
 		
@@ -654,7 +653,7 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::LoadBorrowInst: {
 			*outs << "<< LoadBorrowInst >>" << "\n";
-			LoadInst *castInst = cast<LoadInst>(instr);
+			LoadBorrowInst *castInst = cast<LoadBorrowInst>(instr);
 			*outs << "\t\t [name]:" << castInst->getOperand() << "\n";
 			*outs << "\t\t [addr]:" << castInst->getOperand().getOpaqueValue() << "\n";
 			break;
@@ -730,7 +729,9 @@ ValueKind InstrKindInfoGetter::get() {
 				*outs << "Callee: ";
 				*outs << castInst->getCallee().getOpaqueValue() << "\n";
 			}
-
+			jobject funcRefNode = findAndRemoveCAstNode(castInst->getCallee().getOpaqueValue());
+			// cast in CASt
+			nodeMap->insert(std::make_pair(castInst, funcRefNode));
 			break;
 		}
 
@@ -942,6 +943,13 @@ ValueKind InstrKindInfoGetter::get() {
 		
 		case ValueKind::UnreachableInst: {		
 			*outs << "<< UnreachableInst >>" << "\n";
+			UnreachableInst* castInst =  cast<UnreachableInst>(instr);
+			if(castInst->isBranch()){
+				*outs << "This is a terminator of branch!" << "\n";
+			}
+			if(castInst->isFunctionExiting()){
+				*outs << "This is a terminator of function!" << "\n";
+			}
 			break;
 		}
 		
@@ -1138,12 +1146,30 @@ ValueKind InstrKindInfoGetter::get() {
 		case ValueKind::TryApplyInst: {
 			*outs << "<< TryApplyInst >>" << "\n";
 			TryApplyInst *castInst = cast<TryApplyInst>(instr);
+			jobject funcExprNode = findAndRemoveCAstNode(castInst->getReferencedFunction());
+			list<jobject> params;
+			for (unsigned i = 0; i < castInst->getNumArguments(); ++i) {
+
+				SILValue v = castInst->getArgument(i);
+				jobject child = findAndRemoveCAstNode(v.getOpaqueValue());
+				if (child != nullptr) {
+					params.push_back(child);
+				}
+
+				if (outs != NULL) {
+					*outs << "\t [ARG] #" << i << ": " << v;
+					*outs << "\t [ADDR] #" << i << ": " << v.getOpaqueValue() << "\n";
+				}
+			}
+			jobject call = (*wala)->makeNode(CAstWrapper::CALL, funcExprNode, (*wala)->makeArray(&params));
+			jobject tryfunc = (*wala)->makeNode(CAstWrapper::TRY,call);
+			jobject var_name = (*wala)->makeConstant("resulf_of_try");
+			jobject var = (*wala)->makeNode(CAstWrapper::VAR,var_name);
+			node = (*wala)->makeNode(CAstWrapper::ASSIGN,var,tryfunc);
+			nodeMap->insert(std::make_pair(castInst,node));
 			SILBasicBlock *normalbb = castInst->getNormalBB();
-			//for(unsigned i = 0; i < castInst->getNumArgs(); i++){
-				//*outs << "Argument:" << castInst->getArg(i) << "\n";
-			*outs << "addr:" << normalbb << "\n";
-  			SILBasicBlock *errorbb = castInst->getErrorBB(); 
-  			*outs << "addr:" << errorbb << "\n";
+			symbolTable->insert(normalbb->getArgument(0), "resulf_of_try"); // insert the node into the hash map
+
 			break;
 		}
 
@@ -1153,9 +1179,6 @@ ValueKind InstrKindInfoGetter::get() {
 			break;
 		}
 	}
-	//char instrKindStr[80];
-	//sprintf (instrKindStr, "instrKind: %d\n", instrKind);
-	//*outs << instrKindStr;
 	if (node != nullptr) {
 		nodeList->push_back(node);
 		//wala->print(node);

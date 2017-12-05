@@ -200,7 +200,7 @@ void WALAWalker::analyzeSILModule(SILModule &SM) {
 			
 			llvm::outs() << "Basic Block: " ;
 			llvm::outs() << &*bb << "\n";
-
+			llvm::outs() << "SILFunctions: " << bb->getParent() << "\n";
 			unsigned i = 0; 	// for Instruction count
 			unordered_map<void*, jobject>* nodeMap = new unordered_map<void*, jobject>();
 			list<jobject>* nodeList = new list<jobject>();
