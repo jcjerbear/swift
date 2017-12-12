@@ -1,4 +1,4 @@
-/* fataError
+/* fatalError
  *
  * Raising a fataError exception should break the program.
  */
