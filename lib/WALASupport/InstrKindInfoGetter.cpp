@@ -731,6 +731,8 @@ ValueKind InstrKindInfoGetter::get() {
 				*outs << castInst->getCallee().getOpaqueValue() << "\n";
 			}
 
+			symbolTable->duplicate(castInst, symbolTable->get(castInst->getOperand().getOpaqueValue()).c_str());
+
 			break;
 		}
 
@@ -1138,6 +1140,10 @@ ValueKind InstrKindInfoGetter::get() {
 		case ValueKind::TryApplyInst: {
 			*outs << "<< TryApplyInst >>" << "\n";
 			TryApplyInst *castInst = cast<TryApplyInst>(instr);
+
+			SILValue callee = castInst->getCallee();
+			*outs << "callee: " << callee << "\n";
+
 			SILBasicBlock *normalbb = castInst->getNormalBB();
 			//for(unsigned i = 0; i < castInst->getNumArgs(); i++){
 				//*outs << "Argument:" << castInst->getArg(i) << "\n";
