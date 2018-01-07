@@ -324,7 +324,6 @@ jobject InstrKindInfoGetter::handleDebugValueInst() {
   if (decl != NULL) {
     string varName = decl->getNameStr();
     SILBasicBlock *parentBB = castInst->getParent();
-    
     SILArgument *argument = NULL;
 
     if (argNo >= 1) {
@@ -398,8 +397,10 @@ jobject InstrKindInfoGetter::handleBeginBorrowInst() {
   }
   BeginBorrowInst *castInst = cast<BeginBorrowInst>(instr);
   //*outs << "\t\t [addr]:" << castInst->getOperand().getOpaqueValue() << "\n";
+  jobject node = findAndRemoveCAstNode(castInst->getOperand().getOpaqueValue());
 
-  return findAndRemoveCAstNode(castInst->getOperand().getOpaqueValue());
+  nodeMap->insert(std::make_pair(castInst, node));
+  return node;
 }
 
 jobject InstrKindInfoGetter::handleThinToThickFunctionInst() {
@@ -789,7 +790,7 @@ ValueKind InstrKindInfoGetter::get() {
     }
     
     case ValueKind::ProjectBoxInst: {
-      node = handleDebugValueInst();
+      node = handleProjectBoxInst();
       break;
     }
     
