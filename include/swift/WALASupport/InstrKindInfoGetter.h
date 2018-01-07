@@ -12,46 +12,60 @@ namespace swift {
 
 class InstrKindInfoGetter {
 public:
-	// If not NULL, debugging info will be printed via outs
-	InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, 
-						unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList, 
-						SymbolTable* symbolTable, BasicBlockLabeller* labeller,
-						raw_ostream* outs = NULL);
-	
-	ValueKind get();
+  // If not NULL, debugging info will be printed via outs
+  InstrKindInfoGetter(SILInstruction* instr, WALAIntegration* wala, 
+            unordered_map<void*, jobject>* nodeMap, list<jobject>* nodeList, 
+            SymbolTable* symbolTable, BasicBlockLabeller* labeller,
+            raw_ostream* outs = NULL);
+  
+  ValueKind get();
 private:
-	// member variables
-	SILInstruction* instr;
-	WALAIntegration* wala;
-	unordered_map<void*, jobject>* nodeMap;
-	list<jobject>* nodeList;
-	SymbolTable* symbolTable;
-	BasicBlockLabeller* labeller;
-	raw_ostream* outs;
+  // member variables
+  SILInstruction* instr;
+  WALAIntegration* wala;
+  unordered_map<void*, jobject>* nodeMap;
+  list<jobject>* nodeList;
+  SymbolTable* symbolTable;
+  BasicBlockLabeller* labeller;
+  raw_ostream* outs;
 
-	// member functions
+  // member functions
 
-	// This function finds a CAst node in using the key. The node will be removed from the nodeList
-	// If the key corresponds to a variable, a new VAR CAst node will be created and returned
-	// nullptr will be returned if such node does not exist
-	jobject findAndRemoveCAstNode(void* key);
+  // This function finds a CAst node in `symbolTable` using the key. The node will be removed from the nodeList
+  // If the key corresponds to a variable, a new VAR CAst node will be created and returned
+  // nullptr will be returned if such node does not exist
+  jobject findAndRemoveCAstNode(void* key);
 
-	bool isBuiltInFunction(SILFunction* function);
-	bool isUnaryOperator(SILFunction* function);
-	bool isBinaryOperator(SILFunction* function);
-	Identifier getBuiltInOperatorName(SILFunction* function);
-	jobject getOperatorCAstType(Identifier name);
+  bool isBuiltInFunction(SILFunction* function);
+  bool isUnaryOperator(SILFunction* function);
+  bool isBinaryOperator(SILFunction* function);
+  Identifier getBuiltInOperatorName(SILFunction* function);
+  jobject getOperatorCAstType(Identifier name);
 
-	jobject handleApplyInst();
-	jobject handleStringLiteralInst();
-	jobject handleConstStringLiteralInst();
-	jobject handleFunctionRefInst();
-
-	jobject handleStoreInst();
-	jobject handleBranchInst();
-	jobject handleCondBranchInst();
-	jobject handleAssignInst();
-	jobject handleIntegerLiteralInst();
+  jobject handleAllocBoxInst();
+  jobject handleApplyInst();
+  jobject handleIntegerLiteralInst();
+  jobject handleStringLiteralInst();
+  jobject handleConstStringLiteralInst();
+  jobject handleProjectBoxInst();
+  jobject handleDebugValueInst();
+  jobject handleFunctionRefInst();
+  jobject handleLoadInst();
+  jobject handleLoadBorrowInst();
+  jobject handleBeginBorrowInst();
+  jobject handleThinToThickFunctionInst();
+  jobject handleStoreInst();
+  jobject handleBeginAccessInst();
+  jobject handleAssignInst();
+  jobject handleAllocStackInst();
+  jobject handleReturnInst();
+  jobject handleBranchInst();
+  jobject handleCondBranchInst();
+  jobject handleUnreachableInst();
+  jobject handleCopyValueInst();
+  jobject handleAllocGlobalInst();
+  jobject handleGlobalAddrInst();
+  jobject handleTryApplyInst();
 };
 
 } // end namespace swift
